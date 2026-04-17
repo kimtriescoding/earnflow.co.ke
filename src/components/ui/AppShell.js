@@ -15,7 +15,7 @@ export function AppShell({ title, navItems, children, rightSlot, compactSidebar 
       <div className="blob bottom-4 right-8 h-72 w-72 bg-[color-mix(in_srgb,var(--accent)_36%,transparent)]" />
 
       <div className="content-container flex items-center justify-between pt-4 md:hidden">
-        <Link href="/" className="heading-display text-lg font-bold gradient-text">
+        <Link href="/login" className="heading-display text-lg font-bold gradient-text">
           Earnflow Agencies
         </Link>
         <button
@@ -33,7 +33,7 @@ export function AppShell({ title, navItems, children, rightSlot, compactSidebar 
             <aside className="card-strong neon-outline flex h-full min-h-0 flex-col rounded-[calc(var(--radius-panel)+0.2rem)] p-[1.125rem]">
               <div className="mb-6 px-2.5">
                 <p className="eyebrow-label">Workspace</p>
-                <Link href="/" className="heading-display mt-1 block text-xl font-semibold tracking-tight gradient-text">
+                <Link href="/login" className="heading-display mt-1 block text-xl font-semibold tracking-tight gradient-text">
                   Earnflow Agencies
                 </Link>
                 <p className="mt-1 text-sm muted-text">Growth and earnings command center</p>
@@ -59,7 +59,7 @@ export function AppShell({ title, navItems, children, rightSlot, compactSidebar 
           {compactSidebar ? null : (
             <div className="mb-6 px-2.5">
               <p className="eyebrow-label">Workspace</p>
-              <Link href="/" className="heading-display mt-1 block text-xl font-semibold tracking-tight gradient-text">
+              <Link href="/login" className="heading-display mt-1 block text-xl font-semibold tracking-tight gradient-text">
                 Earnflow Agencies
               </Link>
               <p className="mt-1 text-sm muted-text">Growth and earnings command center</p>

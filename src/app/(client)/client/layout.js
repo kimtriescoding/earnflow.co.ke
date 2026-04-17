@@ -16,7 +16,7 @@ export default async function ClientLayout({ children }) {
   if (user.role !== "client") redirect("/dashboard");
 
   const enabled = await getSetting("client_services_enabled", true);
-  if (!enabled) redirect("/");
+  if (!enabled) redirect("/login");
 
   return children;
 }
