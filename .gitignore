@@ -20,6 +20,9 @@
 # production
 /build
 
+# uploaded academic submissions (local disk)
+/uploads
+
 # misc
 .DS_Store
 *.pem

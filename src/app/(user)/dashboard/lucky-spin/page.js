@@ -1,0 +1,219 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { UserAppShell } from "@/components/user/UserAppShell";
+import { toast } from "sonner";
+import { LuckySpinWheel } from "./LuckySpinWheel";
+
+export default function LuckySpinPage() {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [wheelRotation, setWheelRotation] = useState(0);
+  const [landedLabel, setLandedLabel] = useState("");
+  const [betAmount, setBetAmount] = useState("30");
+  const [topupAmount, setTopupAmount] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [segmentCount, setSegmentCount] = useState(6);
+  const [minBetAmount, setMinBetAmount] = useState(30);
+
+  async function loadLuckySpinState() {
+    const [configRes, walletRes] = await Promise.all([fetch("/api/modules/games/spin"), fetch("/api/modules/games/spin/wallet")]);
+    const [configData, walletData] = await Promise.all([configRes.json(), walletRes.json()]);
+
+    if (configData?.success) {
+      setSegmentCount(Number(configData.data?.segmentCount || 6));
+      setMinBetAmount(Number(configData.data?.minBetAmount || 30));
+      setWalletBalance(Number(configData.data?.balance || 0));
+      setBetAmount((prev) => (prev ? prev : String(configData.data?.minBetAmount || 30)));
+    }
+    if (walletData?.success) {
+      const wallet = walletData.data?.wallet || {};
+      setWalletBalance(Number(wallet.balance || 0));
+    }
+  }
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      loadLuckySpinState().catch(() => {});
+      fetch("/api/auth/me")
+        .then((res) => res.json())
+        .then((data) => {
+          if (!data?.success) return;
+          const userPhone = String(data.data?.phoneNumber || "").trim();
+          if (!userPhone) return;
+          setPhoneNumber((prev) => (String(prev || "").trim() ? prev : userPhone));
+        })
+        .catch(() => {});
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  async function spinNow() {
+    if (loading) return;
+    const numericBet = Number(betAmount || 0);
+    if (!Number.isFinite(numericBet) || numericBet < minBetAmount) {
+      toast.error(`Minimum bet is KES ${Number(minBetAmount).toFixed(2)}.`);
+      return;
+    }
+    setLoading(true);
+    setLandedLabel("");
+    const spinDurationMs = 3600;
+    try {
+      const res = await fetch("/api/modules/games/spin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ betAmount: numericBet }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        toast.error(data.message || "Spin failed.");
+        setLoading(false);
+        return;
+      }
+
+      const nextResult = data.data || null;
+      const effectiveSegCount = Math.max(2, Math.min(12, Number(nextResult?.segmentCount || segmentCount)));
+      setSegmentCount(effectiveSegCount);
+      const sliceTotal = effectiveSegCount + 1;
+      const multiplier = Number(nextResult?.outcome?.multiplier ?? 0);
+      const segmentIndex = multiplier === 0 ? 0 : Math.max(1, Math.min(effectiveSegCount, multiplier));
+      const segmentAngle = 360 / sliceTotal;
+      const targetAngleCenter = segmentIndex * segmentAngle + segmentAngle / 2;
+      const pointerAngle = 270;
+      const landingOffset = pointerAngle - targetAngleCenter;
+      const extraTurns = 6;
+      const nextRotation = wheelRotation + extraTurns * 360 + landingOffset + Math.random() * 6 - 3;
+
+      setWheelRotation(nextRotation);
+
+      window.setTimeout(() => {
+        setResult(nextResult);
+        setLandedLabel(nextResult?.outcome?.multiplier > 0 ? `${nextResult?.outcome?.multiplier}x` : "0x");
+        toast.success(`Spin complete: ${nextResult?.outcome?.label || "Result ready"}`);
+        loadLuckySpinState().catch(() => {});
+        setLoading(false);
+      }, spinDurationMs);
+    } catch {
+      toast.error("Unable to spin right now.");
+      setLoading(false);
+    }
+  }
+
+  async function topupWithCheckout() {
+    const amount = Number(topupAmount || 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Enter a valid amount.");
+      return;
+    }
+    const res = await fetch("/api/modules/games/spin/topup-checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount,
+        phoneNumber,
+        redirectUrl: `${window.location.origin}/dashboard/lucky-spin`,
+      }),
+    });
+    const data = await res.json();
+    if (!data.success) return toast.error(data.message || "Checkout top-up failed.");
+    const checkoutUrl = data.data?.checkoutUrl;
+    if (checkoutUrl) window.location.href = checkoutUrl;
+  }
+
+  return (
+    <UserAppShell title="Lucky Spin">
+      <section className="card-surface w-full rounded-3xl p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="heading-display text-base font-semibold">Top up Lucky Spin balance</h3>
+          <p className="text-sm font-semibold text-[var(--brand)]">Lucky Spin balance: KES {Number(walletBalance).toFixed(2)}</p>
+        </div>
+        <p className="mt-1 text-sm muted-text">Top up your Lucky Spin balance via checkout.</p>
+        <div className="mt-4 grid w-full gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <input
+            type="number"
+            min="1"
+            step="0.01"
+            value={topupAmount}
+            onChange={(e) => setTopupAmount(e.target.value)}
+            placeholder="Amount (KES)"
+            className="interactive-control w-full rounded-2xl px-3 py-2.5 text-sm"
+          />
+          <input
+            type="tel"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+            placeholder="Phone for checkout (optional)"
+            className="interactive-control w-full rounded-2xl px-3 py-2.5 text-sm"
+          />
+          <div className="flex w-full flex-wrap gap-2 md:w-auto md:justify-end">
+            <button type="button" onClick={topupWithCheckout} className="primary-btn w-full px-4 py-2 text-sm md:w-auto">
+              Top Up
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <section className="card-surface rounded-3xl p-6">
+          <h2 className="heading-display text-lg font-semibold">Bet and spin</h2>
+          <p className="mt-1 text-sm muted-text">Bets use Lucky Spin balance only. Min bet: KES {Number(minBetAmount).toFixed(2)}.</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="text-sm">
+              <span className="mb-1 block muted-text">Lucky Spin balance</span>
+              <div className="interactive-control rounded-2xl px-3 py-2.5 font-semibold">KES {Number(walletBalance).toFixed(2)}</div>
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block muted-text">Bet amount (KES)</span>
+              <input
+                type="number"
+                min={minBetAmount}
+                step="0.01"
+                value={betAmount}
+                onChange={(e) => setBetAmount(e.target.value)}
+                className="interactive-control w-full rounded-2xl px-3 py-2.5"
+              />
+            </label>
+          </div>
+          <div className="mt-4 rounded-2xl border border-white/10 bg-[linear-gradient(168deg,color-mix(in_srgb,var(--brand-strong)_14%,var(--brand))_0%,var(--brand)_55%,color-mix(in_srgb,var(--brand)_88%,#042f2e)_100%)] p-6 text-white shadow-[0_12px_32px_rgba(15,118,110,0.18)]">
+            <p className="text-xs uppercase tracking-[0.13em] text-white/80">Latest outcome</p>
+            <p className="heading-display mt-2 text-3xl font-semibold">{result?.outcome?.label || "Ready to spin"}</p>
+            <p className="mt-1 text-sm text-white/85">
+              Payout: KES {Number(result?.payout || 0).toFixed(2)} | Bet: KES {Number(result?.betAmount || 0).toFixed(2)}
+            </p>
+            <button
+              type="button"
+              onClick={spinNow}
+              disabled={loading}
+              className="mt-5 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 disabled:opacity-60"
+            >
+              {loading ? "Spinning..." : "Spin now"}
+            </button>
+          </div>
+        </section>
+        <aside className="card-strong relative overflow-hidden rounded-3xl p-6">
+          <div
+            className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.14)_0%,transparent_70%)]"
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute -bottom-20 -left-12 h-48 w-48 rounded-full bg-[radial-gradient(circle,color-mix(in_srgb,var(--brand)_16%,transparent)_0%,transparent_68%)]"
+            aria-hidden
+          />
+          <h3 className="heading-display relative text-base font-semibold">Lucky wheel</h3>
+          <p className="relative mt-1 text-xs uppercase tracking-[0.12em] muted-text">Multipliers on every wedge</p>
+          <div className="relative mt-6 flex flex-col items-center pb-2">
+            <LuckySpinWheel segmentCount={segmentCount} wheelRotation={wheelRotation} loading={loading} />
+            <p className="mt-6 text-sm muted-text">{loading ? "Wheel is spinning…" : "Tap Spin now to play."}</p>
+            {landedLabel ? (
+              <p className="mt-1 text-sm font-semibold text-[var(--brand)]">
+                Landed on: {landedLabel} (KES {Number(result?.outcome?.reward || 0).toFixed(2)})
+              </p>
+            ) : null}
+          </div>
+        </aside>
+      </div>
+
+    </UserAppShell>
+  );
+}

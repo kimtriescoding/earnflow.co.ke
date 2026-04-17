@@ -6,17 +6,26 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --test \"src/**/*.test.mjs\""
   },
   "dependencies": {
+    "@tanstack/react-table": "^8.21.3",
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.2",
+    "lucide-react": "^1.7.0",
     "mongoose": "^9.3.3",
     "next": "16.2.1",
+    "nodemailer": "^8.0.5",
+    "pdf-parse": "^2.4.5",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "recharts": "^3.8.1",
+    "resend": "^6.11.0",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
+    "sonner": "^2.0.7",
+    "speakeasy": "^2.0.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
