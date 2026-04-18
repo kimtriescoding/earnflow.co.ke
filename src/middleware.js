@@ -19,6 +19,12 @@ async function verifyToken(token) {
 
 export async function middleware(request) {
   const { pathname } = request.nextUrl;
+  if (pathname === "/") {
+    const url = new URL("/signup", request.url);
+    const res = NextResponse.redirect(url, 302);
+    res.headers.set("Cache-Control", "no-store, must-revalidate");
+    return res;
+  }
   const ip = getRequestIp(request.headers);
   if (ip && ip !== "unknown" && isIpBlockedInMemory(ip)) {
     return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 });
@@ -48,5 +54,5 @@ export async function middleware(request) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/profile/:path*", "/admin/:path*", "/client/:path*", "/activate"],
+  matcher: ["/", "/dashboard/:path*", "/profile/:path*", "/admin/:path*", "/client/:path*", "/activate"],
 };

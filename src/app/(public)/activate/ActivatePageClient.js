@@ -53,12 +53,18 @@ export default function ActivatePageClient() {
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [verifyingReturn, setVerifyingReturn] = useState(false);
+  const [feeLoading, setFeeLoading] = useState(true);
 
   const fetchFee = useCallback(async () => {
-    const activationRes = await fetch("/api/payments/wavepay/initiate", { credentials: "include" });
-    const activationData = await activationRes.json().catch(() => ({}));
-    const fee = Number(activationData?.data?.amount || 0);
-    if (Number.isFinite(fee)) setActivationFee(fee);
+    setFeeLoading(true);
+    try {
+      const activationRes = await fetch("/api/payments/wavepay/initiate", { credentials: "include" });
+      const activationData = await activationRes.json().catch(() => ({}));
+      const fee = Number(activationData?.data?.amount || 0);
+      if (Number.isFinite(fee)) setActivationFee(fee);
+    } finally {
+      setFeeLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -154,11 +160,14 @@ export default function ActivatePageClient() {
           const saved = d.phoneNumber || "";
           if (saved) setPhoneNumber(saved);
         }
-        await fetchFee();
       } catch {
         /* keep defaults */
-      } finally {
-        if (!cancelled && !leaving) setCheckingSession(false);
+      }
+      // Do not await activation fee here: `/api/payments/wavepay/initiate` can be slow and
+      // was blocking the whole "Checking your account" screen after `/api/auth/me` finished.
+      if (!cancelled && !leaving) {
+        setCheckingSession(false);
+        void fetchFee();
       }
     })();
 
@@ -286,7 +295,16 @@ export default function ActivatePageClient() {
           </p>
           <div className="mt-4 rounded-2xl border bg-[var(--surface-soft)] px-4 py-3">
             <p className="text-xs uppercase tracking-[0.12em] muted-text">Activation fee</p>
-            <p className="heading-display mt-1 text-xl font-semibold">KES {Number(activationFee || 0).toFixed(2)}</p>
+            <p className="heading-display mt-1 flex min-h-[1.75rem] items-center text-xl font-semibold">
+              {feeLoading ? (
+                <span className="inline-flex items-center gap-2 text-sm font-medium text-[var(--muted)]">
+                  <Loader2 className="h-4 w-4 shrink-0 motion-safe:animate-spin text-[var(--brand)]" strokeWidth={2} aria-hidden />
+                  Loading fee…
+                </span>
+              ) : (
+                <>KES {Number(activationFee || 0).toFixed(2)}</>
+              )}
+            </p>
           </div>
           <form onSubmit={startActivation} className="mt-6 space-y-4">
             <label className="block">
@@ -298,8 +316,8 @@ export default function ActivatePageClient() {
                 placeholder="2547XXXXXXXX"
               />
             </label>
-            <button disabled={loading} className="primary-btn w-full px-4 py-2.5 text-sm disabled:opacity-60">
-              {loading ? "Starting payment..." : "Pay Activation Fee"}
+            <button disabled={loading || feeLoading} className="primary-btn w-full px-4 py-2.5 text-sm disabled:opacity-60">
+              {loading ? "Starting payment..." : feeLoading ? "Loading fee…" : "Pay Activation Fee"}
             </button>
           </form>
           {message ? <p className="mt-3 text-sm muted-text">{message}</p> : null}
