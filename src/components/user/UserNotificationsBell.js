@@ -25,6 +25,12 @@ function urlBase64ToUint8Array(base64String) {
 /** web-push `generate-vapid-keys` public key decodes to 65 bytes (uncompressed P-256). */
 const EXPECTED_VAPID_PUBLIC_KEY_BYTES = 65;
 
+function isLocalPushDevHostname() {
+  if (typeof window === "undefined") return false;
+  const h = (window.location.hostname || "").toLowerCase();
+  return h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h.endsWith(".local");
+}
+
 function pushSubscribeErrorMessage(err) {
   const name = err?.name || "";
   const msg = String(err?.message || err || "");
@@ -35,16 +41,17 @@ function pushSubscribeErrorMessage(err) {
     return "Push needs HTTPS (or localhost). Open the app over https:// or http://localhost.";
   }
   if (name === "AbortError") {
-    return [
-      "The push handshake was aborted after several retries.",
-      "Try opening the app at http://localhost:3000 (not a LAN IP or hostname) if you are developing locally — Chrome often aborts push on non-localhost HTTP origins.",
-      "Otherwise: stable network, pause VPN/ad blockers for this site, DevTools → Application → Service Workers → Unregister, then try again.",
-    ].join(" ");
+    const base = "The push handshake was aborted after several retries.";
+    const local =
+      " For local development, use http://localhost (not a raw LAN IP). In DevTools → Application → Service Workers, click Unregister, reload, then try again.";
+    const production =
+      " On production this usually means the browser could not finish talking to the push service (corporate firewall/VPN, DNS or content filtering, data saver, or a privacy extension). Try another network or device, pause blockers, confirm the site is served over HTTPS, then DevTools → Application → Service Workers → Unregister for this origin and try again.";
+    return base + (isLocalPushDevHostname() ? local : production);
   }
   if (/push service error/i.test(msg)) {
     return [
-      "The push network rejected registration. Run `pnpm run vapid:verify` in the project folder to test your .env keys.",
-      "If that fails, run `pnpm run vapid:keys`, copy the new PUBLIC and PRIVATE lines into .env (one line each, no spaces inside the key), restart `pnpm dev`, then try again.",
+      "The push provider rejected the subscription (invalid or mismatched VAPID keys on the server).",
+      "Regenerate keys (`pnpm run vapid:keys`), set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in the deployed environment, restart the app, and confirm with `pnpm run vapid:verify` using that same .env.",
     ].join(" ");
   }
   return msg || "Could not enable browser alerts.";
