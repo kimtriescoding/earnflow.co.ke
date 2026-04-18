@@ -208,7 +208,7 @@ export default function WithdrawalsPage() {
             </Link>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <div className="rounded-2xl border bg-[color-mix(in_srgb,var(--surface-soft)_74%,var(--muted)_8%)] p-3.5">
               <p className="text-xs uppercase tracking-[0.12em] muted-text">Withdrawable balance</p>
               <p className="heading-display mt-2 text-xl font-semibold">KES {Number(payoutMeta.availableBalance || 0).toFixed(2)}</p>
@@ -219,14 +219,6 @@ export default function WithdrawalsPage() {
               {minW > 0 && maxMpesaForBalance > 0 && !maxMeetsMinimum ? (
                 <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">Under min KES {minW.toFixed(2)}</p>
               ) : null}
-            </div>
-            <div className="rounded-2xl border bg-[color-mix(in_srgb,var(--surface-soft)_74%,var(--muted)_8%)] p-3.5">
-              <p className="text-xs uppercase tracking-[0.12em] muted-text">Fee</p>
-              <p className="heading-display mt-2 text-xl font-semibold">
-                {payoutMeta.feeMode === "percentage"
-                  ? `${Number(payoutMeta.feeValue || 0).toFixed(2)}%`
-                  : `KES ${Number(payoutMeta.feeValue || 0).toFixed(2)}`}
-              </p>
             </div>
             <div className="rounded-2xl border bg-[color-mix(in_srgb,var(--surface-soft)_74%,var(--muted)_8%)] p-3.5">
               <p className="text-xs uppercase tracking-[0.12em] muted-text">Minimum</p>
