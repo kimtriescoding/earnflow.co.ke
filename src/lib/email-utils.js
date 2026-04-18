@@ -39,6 +39,37 @@ export async function sendMfaSetupOtpEmail({ to, username, otp }) {
   }
 }
 
+export async function sendPasswordResetEmail({ to, resetUrl }) {
+  const env = getEnv();
+  const resend = getResendClient();
+  if (!resend || !env.EMAIL_FROM) {
+    logInfo("email.password_reset.skipped", {
+      to,
+      reason: "resend_not_configured",
+      ...(env.NODE_ENV === "development" ? { resetUrl } : {}),
+    });
+    return { sent: false, reason: "resend_not_configured" };
+  }
+  try {
+    const { data, error } = await resend.emails.send({
+      from: env.EMAIL_FROM,
+      to: [to],
+      subject: "Earnflow Agencies password reset",
+      text: `We received a request to reset your password. Open this link (valid 30 minutes):\n\n${resetUrl}\n\nIf you did not request this, you can ignore this email.`,
+      html: `<p>We received a request to reset your password.</p><p><a href="${resetUrl}">Reset your password</a></p><p>This link expires in 30 minutes.</p><p>If you did not request this, you can ignore this email.</p>`,
+    });
+    if (error) {
+      logError("email.password_reset.resend_error", { to, message: error.message });
+      return { sent: false, reason: "resend_api_error" };
+    }
+    logInfo("email.password_reset.sent", { to, id: data?.id });
+    return { sent: true };
+  } catch (err) {
+    logError("email.password_reset.failed", { to, error: err?.message || "unknown" });
+    return { sent: false, reason: "resend_exception" };
+  }
+}
+
 export async function sendWithdrawalSuccessEmail(payload) {
   logInfo("email.withdrawal.success", payload);
 }

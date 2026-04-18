@@ -3,6 +3,9 @@ import User from "@/models/User";
 import PasswordResetToken from "@/models/PasswordResetToken";
 import { generateResetToken, hashResetToken } from "@/lib/auth/reset-password";
 import { ok, guardRateLimit } from "@/lib/api";
+import { getEnv } from "@/lib/env";
+import { sendPasswordResetEmail } from "@/lib/email-utils";
+import { logInfo } from "@/lib/observability/logger";
 
 export async function POST(request) {
   const limited = guardRateLimit(request, "auth.forgot_password", 8, 60_000);
@@ -25,9 +28,12 @@ export async function POST(request) {
     expiresAt,
   });
 
-  const url = `${process.env.APP_URL || "http://localhost:3000"}/reset-password?token=${token}`;
-  // Replace with real email provider integration.
-  console.log(`[Earnflow] Password reset link for ${email}: ${url}`);
+  const env = getEnv();
+  const resetUrl = `${env.APP_URL.replace(/\/$/, "")}/reset-password?token=${encodeURIComponent(token)}`;
+  const sendResult = await sendPasswordResetEmail({ to: email, resetUrl });
+  if (!sendResult?.sent && env.NODE_ENV === "development") {
+    logInfo("email.password_reset.dev_fallback_link", { to: email, resetUrl });
+  }
 
   return ok({ message: "If the email exists, a reset link has been sent." });
 }
