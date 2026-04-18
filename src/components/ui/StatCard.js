@@ -20,11 +20,11 @@ export function StatCard({ label, value, hint, tone = "default", compact = false
           : "bg-[linear-gradient(165deg,#0f766e_0%,#115e59_100%)]";
 
   const shell = compact
-    ? `card-hover relative min-h-[88px] overflow-hidden rounded-xl border border-white/24 p-3 py-2.5 shadow-md sm:min-h-[118px] sm:rounded-[var(--radius-panel)] sm:p-4 sm:py-3.5 sm:shadow-xl md:min-h-[124px] md:p-[1.05rem] md:py-4 ${toneSurface}`
-    : `card-hover relative min-h-[104px] overflow-hidden rounded-2xl border border-white/24 p-3.5 py-3 shadow-lg sm:min-h-[118px] sm:rounded-[var(--radius-panel)] sm:p-4 sm:py-3.5 sm:shadow-xl md:min-h-[124px] md:p-[1.05rem] md:py-4 ${toneSurface}`;
+    ? `card-hover relative min-h-[108px] overflow-hidden rounded-xl border border-white/24 p-3 py-3 shadow-md sm:min-h-[118px] sm:rounded-[var(--radius-panel)] sm:p-4 sm:py-3.5 sm:shadow-xl md:min-h-[124px] md:p-[1.05rem] md:py-4 ${toneSurface}`
+    : `card-hover relative min-h-[122px] overflow-hidden rounded-2xl border border-white/24 p-3.5 py-3.5 shadow-lg sm:min-h-[118px] sm:rounded-[var(--radius-panel)] sm:p-4 sm:py-3.5 sm:shadow-xl md:min-h-[124px] md:p-[1.05rem] md:py-4 ${toneSurface}`;
 
   const valueClass = compact
-    ? `mt-1.5 break-words heading-display text-base font-semibold leading-tight tracking-tight sm:mt-2.5 sm:text-xl sm:leading-none md:text-[1.65rem] ${toneClass}`
+    ? `mt-2 break-words heading-display text-base font-semibold leading-tight tracking-tight sm:mt-2.5 sm:text-xl sm:leading-none md:text-[1.65rem] ${toneClass}`
     : `mt-2 break-words heading-display text-lg font-semibold leading-tight tracking-tight sm:mt-2.5 sm:text-xl sm:leading-none md:text-[1.65rem] ${toneClass}`;
 
   const hintClass = compact
