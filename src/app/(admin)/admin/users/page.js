@@ -2,15 +2,66 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { Star } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/ui/AppShell";
 import { AdvancedTable } from "@/components/admin/AdvancedTable";
 import { adminNavItems } from "@/lib/nav/admin-nav";
 
+function RankStars({ rank }) {
+  const filled = 6 - rank;
+  return (
+    <span className="inline-flex shrink-0 items-center gap-px" aria-hidden>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star
+          key={i}
+          className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${i <= filled ? "fill-amber-400 text-amber-400" : "text-[color-mix(in_oklab,var(--border)_65%,transparent)]"}`}
+          strokeWidth={i <= filled ? 0 : 1.5}
+        />
+      ))}
+    </span>
+  );
+}
+
+const leaderboardRowBorder = "border-b border-[color-mix(in_oklab,var(--border)_40%,transparent)]";
+
+function LeaderboardRow({ rank, userId, username, email, amount }) {
+  const primary = username || email || userId;
+  const showEmailSub = Boolean(email && username);
+  const amountStr = Number(amount || 0).toFixed(2);
+
+  return (
+    <li
+      className={`grid grid-cols-[2rem_5.5rem_minmax(0,1fr)_auto] items-center gap-x-2 py-3 ${leaderboardRowBorder} last:border-b-0`}
+    >
+      <span className="flex items-center justify-center self-stretch text-center text-[0.7rem] font-semibold tabular-nums leading-none muted-text">
+        #{rank}
+      </span>
+      <div className="flex items-center justify-center self-stretch sm:justify-start">
+        <RankStars rank={rank} />
+      </div>
+      <div className="flex min-w-0 flex-col justify-center gap-0.5 self-stretch py-0.5">
+        <Link
+          href={`/admin/users/${userId}`}
+          className="truncate text-sm font-medium leading-snug text-[var(--brand)] underline-offset-2 hover:underline"
+        >
+          {primary}
+        </Link>
+        {showEmailSub ? <p className="truncate text-xs leading-snug muted-text">{email}</p> : null}
+      </div>
+      <div className="flex min-w-0 items-center justify-end self-stretch">
+        <span className="text-right text-sm font-semibold tabular-nums leading-none">KES {amountStr}</span>
+      </div>
+    </li>
+  );
+}
+
 export default function AdminUsersPage() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState({ activated: 0, elevatedRoleCount: 0 });
+  const [topLifetimeEarners, setTopLifetimeEarners] = useState([]);
+  const [topWithdrawable, setTopWithdrawable] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [search, setSearch] = useState("");
@@ -33,6 +84,27 @@ export default function AdminUsersPage() {
         });
       });
   }, [query]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/users/leaderboards")
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (!data.success) {
+          toast.error(data.message || "Unable to load leaderboards.");
+          return;
+        }
+        setTopLifetimeEarners(data.data?.topLifetimeEarners || []);
+        setTopWithdrawable(data.data?.topWithdrawable || []);
+      })
+      .catch(() => {
+        if (!cancelled) toast.error("Unable to load leaderboards.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function impersonate(userId) {
     const res = await fetch(`/api/admin/users/${userId}/impersonate`, { method: "POST" });
@@ -94,6 +166,54 @@ export default function AdminUsersPage() {
           <p className="mt-1 text-xs muted-text">Across full result set</p>
         </div>
       </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="card-surface rounded-3xl section-card">
+          <header className="border-b border-[color-mix(in_oklab,var(--border)_40%,transparent)] pb-3">
+            <p className="text-xs uppercase tracking-[0.12em] muted-text">Top lifetime earners</p>
+            <p className="mt-1 text-xs leading-relaxed muted-text">Wallet lifetime total (matches user dashboard), highest first.</p>
+          </header>
+          <ul className="m-0 list-none p-0 pt-2">
+            {topLifetimeEarners.length ? (
+              topLifetimeEarners.map((row, idx) => (
+                <LeaderboardRow
+                  key={row.userId}
+                  rank={idx + 1}
+                  userId={row.userId}
+                  username={row.username}
+                  email={row.email}
+                  amount={row.lifetimeEarnings}
+                />
+              ))
+            ) : (
+              <li className="py-4 text-sm muted-text">No users with lifetime earnings yet.</li>
+            )}
+          </ul>
+        </div>
+        <div className="card-surface rounded-3xl section-card">
+          <header className="border-b border-[color-mix(in_oklab,var(--border)_40%,transparent)] pb-3">
+            <p className="text-xs uppercase tracking-[0.12em] muted-text">Top withdrawable balances</p>
+            <p className="mt-1 text-xs leading-relaxed muted-text">Main wallet available balance only, highest first.</p>
+          </header>
+          <ul className="m-0 list-none p-0 pt-2">
+            {topWithdrawable.length ? (
+              topWithdrawable.map((row, idx) => (
+                <LeaderboardRow
+                  key={row.userId}
+                  rank={idx + 1}
+                  userId={row.userId}
+                  username={row.username}
+                  email={row.email}
+                  amount={row.availableBalance}
+                />
+              ))
+            ) : (
+              <li className="py-4 text-sm muted-text">No withdrawable balances yet.</li>
+            )}
+          </ul>
+        </div>
+      </div>
+
       <AdvancedTable
         title="All users"
         columns={columns}
