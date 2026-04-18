@@ -1,6 +1,10 @@
 @import "tailwindcss";
 
+/* Light-only: do not follow OS dark mode for Tailwind `dark:` utilities. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
+  color-scheme: light;
   --background: #f2faf9;
   --foreground: #0d1530;
   --surface: rgba(255, 255, 255, 0.8);
@@ -35,27 +39,6 @@
   --font-sans: var(--font-app-sans);
   --font-mono: var(--font-geist-mono);
   --font-display: var(--font-app-display);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #051a18;
-    --foreground: #f1efff;
-    --surface: rgba(15, 25, 46, 0.78);
-    --surface-soft: rgba(22, 35, 65, 0.62);
-    --surface-strong: rgba(17, 30, 56, 0.9);
-    --muted: #9baed6;
-    --brand: #2dd4bf;
-    --brand-strong: #5eead4;
-    --accent: #36dcff;
-    --accent-strong: #14c3ff;
-    --border: rgba(143, 163, 205, 0.25);
-    --ring: color-mix(in srgb, var(--brand) 52%, transparent);
-    --shadow-soft: 0 26px 66px rgba(4, 24, 22, 0.55);
-    --shadow-hover: 0 22px 56px rgba(45, 212, 191, 0.2);
-    --shadow-strong: 0 34px 80px rgba(2, 18, 16, 0.58);
-    --shadow-inset: inset 0 1px 0 rgba(148, 163, 184, 0.2);
-  }
 }
 
 body {
