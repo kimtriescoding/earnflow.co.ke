@@ -2,8 +2,7 @@
 
 import { UserAppShell } from "@/components/user/UserAppShell";
 
-/** Host signup intent; OrionChat should carry `as=host` through to `/register` when auth is required. */
-const CHAT_IFRAME_SRC = "https://orionchathub.com/host/dashboard?as=host";
+const CHAT_IFRAME_SRC = "https://orionchathub.com/register?as=host";
 
 export default function ChatPage() {
   return (
