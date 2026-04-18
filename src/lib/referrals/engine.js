@@ -7,6 +7,8 @@ import mongoose from "mongoose";
 import { loadReferralCommissionRules } from "@/lib/referrals/commission-config";
 import { isStandaloneMongoTransactionError } from "@/lib/db/mongo-transaction-support";
 import { logInfo } from "@/lib/observability/logger";
+import { createReferralCommissionUserNotification } from "@/lib/notifications/referral-commission-notification";
+import { sendReferralCommissionWebPush } from "@/lib/notifications/referral-commission-web-push";
 
 function toUserObjectId(value) {
   if (!value) return null;
@@ -226,6 +228,8 @@ export async function grantReferralSignupBonuses(newUser, context = {}) {
   const commissions = await buildPendingSignupCommissionLines(fullPlan, referredUserId);
   if (!commissions.length) return;
 
+  let pendingWebPush = [];
+
   async function runGrant(session) {
     const sessionOpts = session ? { session } : null;
     const walletUpdateOpts = {
@@ -322,6 +326,21 @@ export async function grantReferralSignupBonuses(newUser, context = {}) {
         } else {
           await ReferralCommission.create([{ ...commissionDoc, ledgerTransactionId: ledgerTx._id }]);
         }
+        await createReferralCommissionUserNotification(
+          {
+            userId: beneficiaryUserId,
+            amount: commission.amount,
+            level: lev,
+            referredUserId,
+            ledgerTransactionId: ledgerTx._id,
+          },
+          sessionOpts
+        );
+        pendingWebPush.push({
+          userId: beneficiaryUserId,
+          amount: Number(commission.amount),
+          level: lev,
+        });
       } catch (e) {
         if (e?.code === 11000) {
           await Transaction.deleteOne({ _id: ledgerTx._id }, sessionOpts || undefined);
@@ -336,13 +355,19 @@ export async function grantReferralSignupBonuses(newUser, context = {}) {
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
+      pendingWebPush = [];
       await runGrant(session);
     });
   } catch (err) {
     if (!isStandaloneMongoTransactionError(err)) throw err;
+    pendingWebPush = [];
     await runGrant(null);
   } finally {
     session.endSession();
+  }
+
+  for (const job of pendingWebPush) {
+    void sendReferralCommissionWebPush(job).catch(() => {});
   }
 }
 

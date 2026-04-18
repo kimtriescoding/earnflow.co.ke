@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeVapidKey } from "@/lib/notifications/vapid-env";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -31,6 +32,11 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().int().positive().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+  /** Web Push (VAPID). Generate: `pnpm exec web-push generate-vapid-keys` */
+  VAPID_PUBLIC_KEY: z.preprocess((v) => normalizeVapidKey(v), z.string().min(1).optional()),
+  VAPID_PRIVATE_KEY: z.preprocess((v) => normalizeVapidKey(v), z.string().min(1).optional()),
+  /** e.g. mailto:you@domain.com or https://your-domain.com */
+  VAPID_SUBJECT: z.preprocess((v) => normalizeVapidKey(v), z.string().min(1).optional()),
 });
 
 let parsed;

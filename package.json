@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test \"src/**/*.test.mjs\""
+    "test": "node --test \"src/**/*.test.mjs\"",
+    "vapid:keys": "web-push generate-vapid-keys",
+    "vapid:verify": "node scripts/verify-vapid.mjs"
   },
   "dependencies": {
     "@tanstack/react-table": "^8.21.3",
@@ -26,6 +28,7 @@
     "socket.io-client": "^4.8.3",
     "sonner": "^2.0.7",
     "speakeasy": "^2.0.0",
+    "web-push": "^3.6.7",
     "zod": "^4.3.6"
   },
   "devDependencies": {
