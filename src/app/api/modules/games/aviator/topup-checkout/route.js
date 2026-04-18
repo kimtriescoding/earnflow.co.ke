@@ -3,12 +3,16 @@ import { requireAuth } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/api";
 import AviatorTopup from "@/models/AviatorTopup";
 import { initiateCheckout } from "@/lib/payments/wavepay";
-import { getZetupayCredentials } from "@/models/Settings";
+import { getSetting, getZetupayCredentials } from "@/models/Settings";
+import { isModuleEnabled } from "@/lib/modules/module-access";
 
 export async function POST(request) {
   const auth = await requireAuth(["user", "admin"]);
   if (auth.error) return auth.error;
   await connectDB();
+
+  const moduleStatus = await getSetting("module_status", {});
+  if (!isModuleEnabled(moduleStatus, "aviator")) return fail("Aviator is disabled", 403);
 
   const body = await request.json().catch(() => ({}));
   const amount = Number(body.amount || 0);

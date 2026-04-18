@@ -9,11 +9,20 @@ import { ok } from "@/lib/api";
 import { DASHBOARD_EARNINGS_TIMEZONE } from "@/lib/config/dashboard-timezone";
 import { sumTodaysEarningsForUser } from "@/lib/dashboard/todays-earnings";
 import mongoose from "mongoose";
+import { getSetting } from "@/models/Settings";
+import {
+  EARNING_MODULE_BUCKET_ADD_FIELDS,
+  earningEventAccessMatch,
+  normalizeModuleAccess,
+  stripDisabledModuleStats,
+} from "@/lib/modules/module-access";
 
 export async function GET() {
   const auth = await requireAuth(["user", "admin"]);
   if (auth.error) return auth.error;
   await connectDB();
+  const moduleStatusRaw = await getSetting("module_status", {});
+  const moduleAccess = normalizeModuleAccess(moduleStatusRaw);
 
   const userIdStr = String(auth.payload.sub);
   const userObjectId = new mongoose.Types.ObjectId(userIdStr);
@@ -22,6 +31,8 @@ export async function GET() {
     beneficiaryUserId: userObjectId,
     ledgerTransactionId: { $ne: null },
   });
+
+  const earningAccessMatch = earningEventAccessMatch(moduleAccess);
 
   const [
     wallet,
@@ -38,15 +49,17 @@ export async function GET() {
     todaysEarnings,
   ] = await Promise.all([
     Wallet.findOne({ userId: userIdStr }).lean(),
-    EarningEvent.find({ userId: userIdStr }).sort({ createdAt: -1 }).limit(30).lean(),
+    EarningEvent.find({ userId: userIdStr, ...earningAccessMatch }).sort({ createdAt: -1 }).limit(30).lean(),
     ReferralCommission.find({ beneficiaryUserId: userIdStr }).sort({ createdAt: -1 }).limit(30).lean(),
     EarningEvent.aggregate([
-      { $match: { userId: userObjectId, status: "approved", amount: { $gt: 0 } } },
-      { $group: { _id: "$source", total: { $sum: "$amount" } } },
+      { $match: { userId: userObjectId, status: "approved", amount: { $gt: 0 }, ...earningAccessMatch } },
+      EARNING_MODULE_BUCKET_ADD_FIELDS,
+      { $group: { _id: "$earningsBucket", total: { $sum: "$amount" } } },
     ]),
     EarningEvent.aggregate([
-      { $match: { userId: userObjectId, status: "pending" } },
-      { $group: { _id: "$source", count: { $sum: 1 } } },
+      { $match: { userId: userObjectId, status: "pending", ...earningAccessMatch } },
+      EARNING_MODULE_BUCKET_ADD_FIELDS,
+      { $group: { _id: "$earningsBucket", count: { $sum: 1 } } },
     ]),
     ReferralCommission.aggregate([
       { $match: { beneficiaryUserId: userObjectId } },
@@ -78,7 +91,7 @@ export async function GET() {
     User.countDocuments({ referredByUserId: userIdStr }),
     Transaction.find({ userId: userIdStr, type: "withdrawal", status: "completed" }).select("amount").lean(),
     User.findById(userIdStr).select("referralCode username").lean(),
-    sumTodaysEarningsForUser(userIdStr),
+    sumTodaysEarningsForUser(userIdStr, { moduleAccess }),
   ]);
 
   const fromCommissions = Number(referralCommissionAgg?.[0]?.total || 0);
@@ -101,6 +114,9 @@ export async function GET() {
     return acc;
   }, {});
 
+  const moduleTotals = stripDisabledModuleStats(moduleAccess, approvedBySource);
+  const pendingCounts = stripDisabledModuleStats(moduleAccess, pendingBySource);
+
   return ok({
     data: {
       wallet,
@@ -109,9 +125,9 @@ export async function GET() {
       referrals,
       referralCode: user?.referralCode || "",
       username: user?.username || "",
-      moduleTotals: approvedBySource,
+      moduleTotals,
       referralEarned,
-      pendingCounts: pendingBySource,
+      pendingCounts,
       withdrawals: {
         totalAmount: withdrawals.totalAmount,
         totalCount: withdrawals.totalCount,

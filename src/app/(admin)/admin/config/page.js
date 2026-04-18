@@ -5,6 +5,15 @@ import { AppShell } from "@/components/ui/AppShell";
 import { adminNavItems } from "@/lib/nav/admin-nav";
 import { toast } from "sonner";
 
+const MODULE_LABELS = {
+  video: "Video",
+  task: "Tasks",
+  lucky_spin: "Lucky Spin",
+  aviator: "Aviator",
+  academic: "Academic",
+  chat: "Chat",
+};
+
 export default function AdminConfigPage() {
   const [activationFee, setActivationFee] = useState(1000);
   const [minWithdrawalAmount, setMinWithdrawalAmount] = useState(0);
@@ -24,7 +33,8 @@ export default function AdminConfigPage() {
   const [modules, setModules] = useState({
     video: true,
     task: true,
-    game: true,
+    lucky_spin: true,
+    aviator: true,
     academic: true,
     chat: true,
   });
@@ -56,10 +66,14 @@ export default function AdminConfigPage() {
         }
         if (map.module_status) {
           const ms = map.module_status;
+          const hasLucky = Object.prototype.hasOwnProperty.call(ms, "lucky_spin");
+          const hasAviator = Object.prototype.hasOwnProperty.call(ms, "aviator");
+          const gameLegacy = ms.game !== false;
           setModules({
             video: ms.video !== false,
             task: ms.task !== false,
-            game: ms.game !== false,
+            lucky_spin: hasLucky ? ms.lucky_spin !== false : gameLegacy,
+            aviator: hasAviator ? ms.aviator !== false : gameLegacy,
             academic: ms.academic !== false,
             chat: ms.chat !== false,
           });
@@ -94,7 +108,8 @@ export default function AdminConfigPage() {
         module_status: {
           video: modules.video,
           task: modules.task,
-          game: modules.game,
+          lucky_spin: modules.lucky_spin,
+          aviator: modules.aviator,
           academic: modules.academic,
           chat: modules.chat,
         },
@@ -221,7 +236,7 @@ export default function AdminConfigPage() {
                     checked={Boolean(modules[key])}
                     onChange={(e) => setModules((p) => ({ ...p, [key]: e.target.checked }))}
                   />
-                  {key}
+                  {MODULE_LABELS[key] || key}
                 </label>
               ))}
             </div>

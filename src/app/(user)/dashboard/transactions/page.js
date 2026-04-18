@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { UserAppShell } from "@/components/user/UserAppShell";
 import { UserDataTable } from "@/components/user/UserDataTable";
 import { StatusChip } from "@/components/ui/StatusChip";
+import { useUserModuleAccess } from "@/components/user/UserModuleAccessProvider";
+import { isTransactionAreaEnabled } from "@/lib/modules/module-access";
 import { toast } from "sonner";
 
 const AREA_LABEL = {
@@ -18,6 +20,7 @@ function formatKes(n) {
 }
 
 export default function TransactionsPage() {
+  const access = useUserModuleAccess();
   const [rawRows, setRawRows] = useState([]);
   const [summary, setSummary] = useState({ grandIn: 0, grandOut: 0 });
   const [loading, setLoading] = useState(true);
@@ -44,16 +47,31 @@ export default function TransactionsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const areaOptions = useMemo(() => {
+    const opts = [
+      { value: "all", label: "All areas" },
+      { value: "main", label: "Main wallet" },
+    ];
+    if (access.lucky_spin) opts.push({ value: "lucky_spin", label: "Lucky Spin" });
+    if (access.aviator) opts.push({ value: "aviator", label: "Aviator" });
+    return opts;
+  }, [access.lucky_spin, access.aviator]);
+
+  const areaFilterActive = useMemo(() => {
+    if (areaFilter !== "all" && !isTransactionAreaEnabled(access, areaFilter)) return "all";
+    return areaFilter;
+  }, [access, areaFilter]);
+
   const filtered = useMemo(() => {
     const q = appliedSearch.trim().toLowerCase();
     return rawRows.filter((r) => {
-      if (areaFilter !== "all" && r.area !== areaFilter) return false;
+      if (areaFilterActive !== "all" && r.area !== areaFilterActive) return false;
       if (directionFilter !== "all" && r.direction !== directionFilter) return false;
       if (!q) return true;
       const hay = [r.label, r.status, r.kind, AREA_LABEL[r.area] || r.area, r.direction].join(" ").toLowerCase();
       return hay.includes(q);
     });
-  }, [rawRows, areaFilter, directionFilter, appliedSearch]);
+  }, [rawRows, areaFilterActive, directionFilter, appliedSearch]);
 
   const total = filtered.length;
   const pagedRows = useMemo(() => {
@@ -63,7 +81,7 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [areaFilter, directionFilter, appliedSearch]);
+  }, [areaFilterActive, directionFilter, appliedSearch]);
 
   const columns = useMemo(
     () => [
@@ -141,13 +159,14 @@ export default function TransactionsPage() {
           <span className="muted-text">Area</span>
           <select
             className="interactive-control focus-ring min-w-[10rem] px-3 py-2 text-sm"
-            value={areaFilter}
+            value={areaFilterActive}
             onChange={(e) => setAreaFilter(e.target.value)}
           >
-            <option value="all">All areas</option>
-            <option value="main">Main wallet</option>
-            <option value="lucky_spin">Lucky Spin</option>
-            <option value="aviator">Aviator</option>
+            {areaOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
           </select>
         </label>
         <label className="grid gap-1 text-sm">

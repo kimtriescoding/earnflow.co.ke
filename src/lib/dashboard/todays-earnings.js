@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import EarningEvent from "@/models/EarningEvent";
 import ReferralCommission from "@/models/ReferralCommission";
 import { DASHBOARD_EARNINGS_TIMEZONE } from "@/lib/config/dashboard-timezone";
+import { earningEventAccessMatch } from "@/lib/modules/module-access";
 
 export { DASHBOARD_EARNINGS_TIMEZONE };
 
@@ -12,12 +13,20 @@ export { DASHBOARD_EARNINGS_TIMEZONE };
  * Events: credit time is approvedAt when set (admin approval), else createdAt (auto-approved).
  * Commissions: createdAt (credited immediately).
  */
-export async function sumTodaysEarningsForUser(userId, { timeZone = DASHBOARD_EARNINGS_TIMEZONE } = {}) {
+export async function sumTodaysEarningsForUser(
+  userId,
+  { timeZone = DASHBOARD_EARNINGS_TIMEZONE, moduleAccess } = {}
+) {
   const oid = typeof userId === "string" ? new mongoose.Types.ObjectId(userId) : userId;
+
+  const earningBase = { userId: oid, status: "approved", amount: { $gt: 0 } };
+  if (moduleAccess) {
+    Object.assign(earningBase, earningEventAccessMatch(moduleAccess));
+  }
 
   const [earningRows, commissionRows] = await Promise.all([
     EarningEvent.aggregate([
-      { $match: { userId: oid, status: "approved", amount: { $gt: 0 } } },
+      { $match: earningBase },
       {
         $match: {
           $expr: {

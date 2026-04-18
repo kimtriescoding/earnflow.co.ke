@@ -1,6 +1,8 @@
 import connectDB from "@/lib/db";
 import { requireAuth } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/api";
+import { getSetting } from "@/models/Settings";
+import { isModuleEnabled } from "@/lib/modules/module-access";
 import Wallet from "@/models/Wallet";
 import User from "@/models/User";
 import Transaction from "@/models/Transaction";
@@ -11,6 +13,9 @@ export async function POST(request) {
   const auth = await requireAuth(["user", "admin"]);
   if (auth.error) return auth.error;
   await connectDB();
+
+  const moduleStatus = await getSetting("module_status", {});
+  if (!isModuleEnabled(moduleStatus, "lucky_spin")) return fail("Lucky Spin is disabled", 403);
 
   const body = await request.json().catch(() => ({}));
   const amount = Number(body.amount || 0);

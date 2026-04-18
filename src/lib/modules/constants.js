@@ -20,7 +20,9 @@ export function fromModuleType(type = "") {
 
 export function moduleStatusKey(slug = "") {
   const key = normalizeModuleKey(slug);
-  return key === "lucky-spin" || key === "aviator" ? "game" : key;
+  if (key === "lucky-spin") return "lucky_spin";
+  if (key === "aviator") return "aviator";
+  return key;
 }
 
 export function moduleSettingsKey(slug = "") {

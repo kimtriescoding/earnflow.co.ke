@@ -1,5 +1,6 @@
 import { requireAuth } from "@/lib/auth/guards";
 import { getSetting } from "@/models/Settings";
+import { isModuleEnabled } from "@/lib/modules/module-access";
 import { submitEarningEvent } from "@/lib/ledger/earnings";
 import { logModuleInteraction } from "@/lib/modules/interactions";
 import { fail, ok } from "@/lib/api";
@@ -17,7 +18,7 @@ export async function GET() {
   const wallet = await getOrCreateLuckySpinWallet(auth.payload.sub);
   return ok({
     data: {
-      enabled: moduleStatus?.game !== false,
+      enabled: isModuleEnabled(moduleStatus, "lucky_spin"),
       segmentCount: Number(defaults?.segmentCount || 6),
       minBetAmount: Number(defaults?.minBetAmount || 10),
       balance: Number(wallet.balance || 0),
@@ -29,7 +30,7 @@ export async function POST(request) {
   const auth = await requireAuth(["user", "admin"]);
   if (auth.error) return auth.error;
   const moduleStatus = await getSetting("module_status", {});
-  if (moduleStatus?.game === false) return fail("Game module disabled", 403);
+  if (!isModuleEnabled(moduleStatus, "lucky_spin")) return fail("Lucky Spin is disabled", 403);
   const defaults = await getSetting("module_lucky_spin_default", {});
   const segmentCount = Math.min(12, Math.max(2, Number(defaults?.segmentCount || 6)));
   const minBetAmount = Math.max(1, Number(defaults?.minBetAmount || 10));

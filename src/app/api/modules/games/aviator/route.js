@@ -3,6 +3,7 @@ import connectDB from "@/lib/db";
 import ModuleConfig from "@/models/ModuleConfig";
 import AviatorLedger from "@/models/AviatorLedger";
 import { getSetting } from "@/models/Settings";
+import { isModuleEnabled } from "@/lib/modules/module-access";
 import { submitEarningEvent } from "@/lib/ledger/earnings";
 import { logModuleInteraction } from "@/lib/modules/interactions";
 import { ok, fail } from "@/lib/api";
@@ -179,7 +180,7 @@ export async function GET() {
   if (auth.error) return auth.error;
   await connectDB();
   const moduleStatus = await getSetting("module_status", {});
-  if (moduleStatus?.game === false) return fail("Game module disabled", 403);
+  if (!isModuleEnabled(moduleStatus, "aviator")) return fail("Aviator is disabled", 403);
   const defaults = await getSetting("module_aviator_default", {});
   const config = await ModuleConfig.findOne({ key: "game:aviator" }).lean();
   const settings = resolveAviatorSettings(defaults, config?.value);
@@ -283,7 +284,7 @@ export async function POST(request) {
   if (auth.error) return auth.error;
   await connectDB();
   const moduleStatus = await getSetting("module_status", {});
-  if (moduleStatus?.game === false) return fail("Game module disabled", 403);
+  if (!isModuleEnabled(moduleStatus, "aviator")) return fail("Aviator is disabled", 403);
   const body = await request.json().catch(() => ({}));
   const action = String(body.action || "place").trim().toLowerCase();
   const defaults = await getSetting("module_aviator_default", {});

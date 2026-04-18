@@ -5,11 +5,14 @@ import Transaction from "@/models/Transaction";
 import { requireAuth } from "@/lib/auth/guards";
 import { ok } from "@/lib/api";
 import { referralUplineSourceSlug } from "@/lib/dashboard/referral-feed-naming";
+import { getSetting } from "@/models/Settings";
+import { isEarningSourceEnabled, normalizeModuleAccess } from "@/lib/modules/module-access";
 
 export async function GET(request) {
   const auth = await requireAuth(["user", "admin"]);
   if (auth.error) return auth.error;
   await connectDB();
+  const moduleAccess = normalizeModuleAccess(await getSetting("module_status", {}));
   const { searchParams } = new URL(request.url);
   const page = Number(searchParams.get("page") || 1);
   const pageSize = Math.min(100, Number(searchParams.get("pageSize") || 20));
@@ -37,15 +40,17 @@ export async function GET(request) {
   const commissionsForFeed = shouldIncludeNonEarnings ? commissions.filter((c) => !c.ledgerTransactionId) : [];
 
   const mergedFull = [
-    ...events.map((item) => ({
-      id: item._id.toString(),
-      type: "earning",
-      source: item.source,
-      amount: Number(item.amount || 0),
-      status: item.status,
-      metadata: item.metadata || {},
-      createdAt: item.createdAt,
-    })),
+    ...events
+      .filter((item) => isEarningSourceEnabled(moduleAccess, item.source, item.metadata))
+      .map((item) => ({
+        id: item._id.toString(),
+        type: "earning",
+        source: item.source,
+        amount: Number(item.amount || 0),
+        status: item.status,
+        metadata: item.metadata || {},
+        createdAt: item.createdAt,
+      })),
     ...commissionsForFeed.map((item) => ({
       id: item._id.toString(),
       type: "referral",

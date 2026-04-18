@@ -7,8 +7,10 @@ import { UserDataTable } from "@/components/user/UserDataTable";
 import { StatusChip } from "@/components/ui/StatusChip";
 import { Gift, Link2, WalletCards } from "lucide-react";
 import { toast } from "sonner";
+import { useUserModuleAccess } from "@/components/user/UserModuleAccessProvider";
 
 export default function DashboardPage() {
+  const moduleAccess = useUserModuleAccess();
   const [summary, setSummary] = useState({
     wallet: { availableBalance: 0, pendingBalance: 0, lifetimeEarnings: 0 },
     withdrawals: { totalAmount: 0, totalCount: 0 },
@@ -46,35 +48,40 @@ export default function DashboardPage() {
   const withdrawals = Number(summary.withdrawals?.totalAmount || 0).toFixed(2);
   const withdrawalCount = Number(summary.withdrawals?.totalCount || 0);
   const directReferrals = Number(summary.referrals || 0);
-  const moduleCards = useMemo(
-    () => [
-      {
+  const moduleCards = useMemo(() => {
+    const cards = [];
+    if (moduleAccess.task) {
+      cards.push({
         key: "task",
         label: "Tasks earned",
         amount: Number(summary.moduleTotals?.task || 0).toFixed(2),
         pending: Number(summary.pendingCounts?.task || 0),
-      },
-      {
+      });
+    }
+    if (moduleAccess.video) {
+      cards.push({
         key: "video",
         label: "Video earned",
         amount: Number(summary.moduleTotals?.video || 0).toFixed(2),
         pending: Number(summary.pendingCounts?.video || 0),
-      },
-      {
+      });
+    }
+    if (moduleAccess.chat) {
+      cards.push({
         key: "chat",
         label: "Chat earned",
         amount: Number(summary.moduleTotals?.chat || 0).toFixed(2),
         pending: Number(summary.pendingCounts?.chat || 0),
-      },
-      {
-        key: "referral",
-        label: "Referral earned",
-        amount: Number(summary.referralEarned || 0).toFixed(2),
-        pending: 0,
-      },
-    ],
-    [summary.moduleTotals, summary.pendingCounts, summary.referralEarned]
-  );
+      });
+    }
+    cards.push({
+      key: "referral",
+      label: "Referral earned",
+      amount: Number(summary.referralEarned || 0).toFixed(2),
+      pending: 0,
+    });
+    return cards;
+  }, [moduleAccess.task, moduleAccess.video, moduleAccess.chat, summary.moduleTotals, summary.pendingCounts, summary.referralEarned]);
   const activityColumns = [
     { field: "type", header: "Type", sortable: false },
     { field: "source", header: "Source", sortable: false },

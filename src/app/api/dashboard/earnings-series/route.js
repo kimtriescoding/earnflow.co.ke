@@ -2,6 +2,8 @@ import connectDB from "@/lib/db";
 import EarningEvent from "@/models/EarningEvent";
 import { requireAuth } from "@/lib/auth/guards";
 import { ok } from "@/lib/api";
+import { getSetting } from "@/models/Settings";
+import { isEarningSourceEnabled, normalizeModuleAccess } from "@/lib/modules/module-access";
 
 function startOfDay(d) {
   const x = new Date(d);
@@ -13,6 +15,7 @@ export async function GET() {
   const auth = await requireAuth(["user", "admin"]);
   if (auth.error) return auth.error;
   await connectDB();
+  const moduleAccess = normalizeModuleAccess(await getSetting("module_status", {}));
 
   const from = startOfDay(new Date(Date.now() - 1000 * 60 * 60 * 24 * 13));
   const events = await EarningEvent.find({
@@ -33,6 +36,7 @@ export async function GET() {
   const sourceMap = new Map();
 
   for (const ev of events) {
+    if (!isEarningSourceEnabled(moduleAccess, ev.source, ev.metadata)) continue;
     const key = new Date(ev.createdAt).toISOString().slice(0, 10);
     dayMap.set(key, (dayMap.get(key) || 0) + Number(ev.amount || 0));
     sourceMap.set(ev.source, (sourceMap.get(ev.source) || 0) + Number(ev.amount || 0));

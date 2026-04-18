@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/api";
 import Settings from "@/models/Settings";
 import { isSupportedModule, moduleSettingsKey, moduleStatusKey, normalizeModuleKey } from "@/lib/modules/constants";
+import { isModuleEnabled } from "@/lib/modules/module-access";
 
 function clampNumber(value, fallback, min = 0, max = Number.POSITIVE_INFINITY) {
   const parsed = Number(value);
@@ -64,7 +65,7 @@ export async function GET(_request, { params }) {
   const statusKey = moduleStatusKey(slug);
   return ok({
     data: {
-      enabled: Boolean(statusDoc?.value?.[statusKey]),
+      enabled: isModuleEnabled(statusDoc?.value || {}, statusKey),
       config: cfgDoc?.value || {},
     },
   });

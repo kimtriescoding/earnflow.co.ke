@@ -5,7 +5,7 @@ import { isModuleEnabled } from "@/lib/modules/module-access";
 
 /**
  * Server-only: redirect to `/dashboard` if the earning module is turned off in admin.
- * @param {"video" | "task" | "game" | "academic" | "chat"} moduleKey
+ * @param {"video" | "task" | "game" | "academic" | "chat" | "lucky_spin" | "aviator"} moduleKey — `game` is deprecated; use `lucky_spin` / `aviator`.
  */
 export async function assertUserModuleEnabled(moduleKey) {
   await connectDB();

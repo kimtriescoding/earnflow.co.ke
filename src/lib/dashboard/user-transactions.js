@@ -8,6 +8,7 @@ import AviatorLedger from "@/models/AviatorLedger";
 import Wallet from "@/models/Wallet";
 import LuckySpinWallet from "@/models/LuckySpinWallet";
 import AviatorWallet from "@/models/AviatorWallet";
+import { isTransactionAreaEnabled, normalizeModuleAccess } from "@/lib/modules/module-access";
 
 const FETCH_LIMIT = 300;
 
@@ -75,8 +76,9 @@ function summarizeRows(rows) {
 
 /**
  * Unified money-in / money-out feed across main wallet, Lucky Spin, and Aviator.
+ * @param {{ moduleStatus?: Record<string, unknown> }} [options]
  */
-export async function getUserTransactionFeed(userId) {
+export async function getUserTransactionFeed(userId, options = {}) {
   const uid = userId;
   const [
     wallet,
@@ -218,10 +220,12 @@ export async function getUserTransactionFeed(userId) {
 
   rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  const summary = summarizeRows(rows);
+  const access = normalizeModuleAccess(options.moduleStatus ?? {});
+  const visibleRows = rows.filter((r) => isTransactionAreaEnabled(access, r.area));
+  const summary = summarizeRows(visibleRows);
 
   return {
-    rows,
+    rows: visibleRows,
     summary,
     balances: {
       mainAvailable: Number(wallet?.availableBalance || 0),
