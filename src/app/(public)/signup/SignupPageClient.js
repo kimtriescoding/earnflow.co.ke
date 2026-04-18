@@ -7,7 +7,8 @@ import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
 
 /** Persists invite ref across login ↔ signup until signup succeeds or a new ?ref= is opened. */
-const SIGNUP_REF_STORAGE_KEY = "taskwave_signup_referral";
+const SIGNUP_REF_STORAGE_KEY = "earnflow_signup_referral";
+const LEGACY_SIGNUP_REF_STORAGE_KEY = "taskwave_signup_referral";
 
 export default function SignupPageClient() {
   const params = useSearchParams();
@@ -30,7 +31,19 @@ export default function SignupPageClient() {
         setInviteReferralCode(urlRef);
         setForm((p) => (p.referralCode === urlRef ? p : { ...p, referralCode: urlRef }));
       } else {
-        const stored = String(localStorage.getItem(SIGNUP_REF_STORAGE_KEY) || "").trim().toLowerCase();
+        let stored = String(localStorage.getItem(SIGNUP_REF_STORAGE_KEY) || "").trim().toLowerCase();
+        if (!stored) {
+          const legacy = String(localStorage.getItem(LEGACY_SIGNUP_REF_STORAGE_KEY) || "").trim().toLowerCase();
+          if (legacy) {
+            try {
+              localStorage.setItem(SIGNUP_REF_STORAGE_KEY, legacy);
+              localStorage.removeItem(LEGACY_SIGNUP_REF_STORAGE_KEY);
+            } catch {
+              /* ignore */
+            }
+            stored = legacy;
+          }
+        }
         setInviteReferralCode(stored);
         if (stored) {
           setForm((p) => (p.referralCode === stored ? p : { ...p, referralCode: stored }));
@@ -125,6 +138,7 @@ export default function SignupPageClient() {
     if (data.success) {
       try {
         localStorage.removeItem(SIGNUP_REF_STORAGE_KEY);
+        localStorage.removeItem(LEGACY_SIGNUP_REF_STORAGE_KEY);
       } catch {
         /* ignore */
       }

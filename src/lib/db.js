@@ -3,12 +3,12 @@ import { getEnv } from "./env";
 
 const globalForMongo = globalThis;
 
-if (!globalForMongo.__taskwaveMongo) {
-  globalForMongo.__taskwaveMongo = { conn: null, promise: null };
+if (!globalForMongo.__earnflowMongo) {
+  globalForMongo.__earnflowMongo = { conn: null, promise: null };
 }
 
 export default async function connectDB() {
-  const cache = globalForMongo.__taskwaveMongo;
+  const cache = globalForMongo.__earnflowMongo;
   if (cache.conn) return cache.conn;
   if (!cache.promise) {
     const { MONGODB_URI } = getEnv();
