@@ -18,7 +18,7 @@ const envSchema = z.object({
   WAVEPAY_ALLOW_INSECURE_CALLBACKS: z.enum(["true", "false"]).default("false"),
   /** Optional: `Authorization: Bearer <secret>` for `/api/cron/outbox` */
   CRON_SECRET: z.string().min(16).optional(),
-  ADMIN_TOTP_ISSUER: z.string().default("TaskWave"),
+  ADMIN_TOTP_ISSUER: z.string().default("Earnflow"),
   /** Speakeasy TOTP `window` (±steps × 30s). Match needs |clock skew| ≤ window; e.g. 24 ≈ ±12 min. */
   TOTP_VERIFY_WINDOW: z.coerce.number().int().min(1).max(120).default(24),
   ADMIN_MFA_REAUTH_WINDOW_SEC: z.coerce.number().int().positive().default(300),
