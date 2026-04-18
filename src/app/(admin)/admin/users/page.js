@@ -15,7 +15,7 @@ function RankStars({ rank }) {
       {[1, 2, 3, 4, 5].map((i) => (
         <Star
           key={i}
-          className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${i <= filled ? "fill-amber-400 text-amber-400" : "text-[color-mix(in_oklab,var(--border)_65%,transparent)]"}`}
+          className={`h-2.5 w-2.5 sm:h-3 sm:w-3 md:h-3.5 md:w-3.5 ${i <= filled ? "fill-amber-400 text-amber-400" : "text-[color-mix(in_oklab,var(--border)_65%,transparent)]"}`}
           strokeWidth={i <= filled ? 0 : 1.5}
         />
       ))}
@@ -32,25 +32,29 @@ function LeaderboardRow({ rank, userId, username, email, amount }) {
 
   return (
     <li
-      className={`grid grid-cols-[2rem_5.5rem_minmax(0,1fr)_auto] items-center gap-x-2 py-3 ${leaderboardRowBorder} last:border-b-0`}
+      className={`grid gap-x-2 gap-y-2 py-3 max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:grid-rows-[auto_auto] max-sm:[grid-template-areas:'lead_amount'_'user_user'] sm:grid-cols-[2rem_5.5rem_minmax(0,1fr)_auto] sm:grid-rows-1 sm:items-center sm:gap-y-0 ${leaderboardRowBorder} last:border-b-0`}
     >
-      <span className="flex items-center justify-center self-stretch text-center text-[0.7rem] font-semibold tabular-nums leading-none muted-text">
-        #{rank}
-      </span>
-      <div className="flex items-center justify-center self-stretch sm:justify-start">
-        <RankStars rank={rank} />
+      <div className="flex min-w-0 items-center gap-1.5 max-sm:[grid-area:lead] sm:contents">
+        <span className="flex w-6 shrink-0 items-center justify-center text-center text-[0.65rem] font-semibold tabular-nums leading-none muted-text sm:w-auto sm:self-stretch sm:text-[0.7rem]">
+          #{rank}
+        </span>
+        <div className="flex shrink-0 items-center sm:self-stretch sm:items-center">
+          <RankStars rank={rank} />
+        </div>
       </div>
-      <div className="flex min-w-0 flex-col justify-center gap-0.5 self-stretch py-0.5">
+      <div className="flex min-w-0 flex-col justify-center gap-0.5 max-sm:[grid-area:user] sm:self-stretch sm:py-0.5">
         <Link
           href={`/admin/users/${userId}`}
-          className="truncate text-sm font-medium leading-snug text-[var(--brand)] underline-offset-2 hover:underline"
+          className="max-sm:break-words font-medium leading-snug text-[var(--brand)] underline-offset-2 hover:underline max-sm:text-[0.8125rem] sm:truncate sm:text-sm"
         >
           {primary}
         </Link>
-        {showEmailSub ? <p className="truncate text-xs leading-snug muted-text">{email}</p> : null}
+        {showEmailSub ? (
+          <p className="max-sm:break-words text-xs leading-snug muted-text max-sm:text-[0.7rem] sm:truncate">{email}</p>
+        ) : null}
       </div>
-      <div className="flex min-w-0 items-center justify-end self-stretch">
-        <span className="text-right text-sm font-semibold tabular-nums leading-none">KES {amountStr}</span>
+      <div className="flex min-w-0 items-center justify-end max-sm:[grid-area:amount] max-sm:self-center sm:contents">
+        <span className="text-right text-xs font-semibold tabular-nums leading-none sm:text-sm">KES {amountStr}</span>
       </div>
     </li>
   );
@@ -150,7 +154,7 @@ export default function AdminUsersPage() {
 
   return (
     <AppShell title="User Management" navItems={adminNavItems}>
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
         <div className="card-surface rounded-3xl section-card">
           <p className="text-xs uppercase tracking-[0.12em] muted-text">Listed users</p>
           <p className="heading-display mt-2 text-2xl font-semibold">{total}</p>
