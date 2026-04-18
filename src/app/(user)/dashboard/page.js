@@ -134,7 +134,7 @@ export default function DashboardPage() {
         <div className="card-surface neon-outline rounded-2xl p-3 sm:p-4 md:rounded-[var(--radius-panel)] md:p-4 lg:p-5">
           <div className="flex items-center gap-1.5">
             <WalletCards className="h-3.5 w-3.5 shrink-0 text-[var(--brand)] sm:h-4 sm:w-4" strokeWidth={2} aria-hidden />
-            <h2 className="section-title text-[0.98rem] leading-tight sm:text-base md:text-[1.08rem]">Performance snapshot</h2>
+            <h2 className="section-title text-[0.98rem] leading-tight sm:text-base md:text-[1.08rem]">Earnings by source</h2>
           </div>
           <div className="mt-2 grid gap-1.5 sm:mt-2.5 sm:gap-2 md:grid-cols-2">
             {moduleCards.map((item) => (
