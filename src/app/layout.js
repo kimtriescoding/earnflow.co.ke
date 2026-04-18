@@ -21,7 +21,7 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
   title: "Earnflow Agencies",
-  description: "Promote videos, run paid chat campaigns, and order academic assignments with admin-managed delivery.",
+  description: "Earn from videos, paid chat, academic writing, and more on Earnflow Agencies.",
 };
 
 export default function RootLayout({ children }) {

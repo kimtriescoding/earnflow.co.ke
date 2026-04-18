@@ -32,15 +32,25 @@ export async function POST(request) {
     if (isPrivileged) {
       if (user.mfaEnabled) {
         const otp = String(body.otp || "").trim();
+        if (!otp) {
+          return fail("MFA code required", 401, {
+            mfaRequired: true,
+            mfaSetupRequired: false,
+            /** Client: first step after valid password—do not treat as a user error. */
+            mfaAwaitingCode: true,
+          });
+        }
         let verified = verifyTotp({ secret: user.mfaSecret, token: otp });
-        if (!verified && otp) {
+        if (!verified) {
           const hash = hashBackupCode(otp);
           if (user.mfaBackupCodeHashes.includes(hash)) {
             user.mfaBackupCodeHashes = user.mfaBackupCodeHashes.filter((codeHash) => codeHash !== hash);
             verified = true;
           }
         }
-        if (!verified) return fail("MFA code required", 401, { mfaRequired: true, mfaSetupRequired: false });
+        if (!verified) {
+          return fail("Invalid authenticator code or backup code.", 401, { mfaRequired: true, mfaSetupRequired: false });
+        }
         user.mfaLastVerifiedAt = new Date();
         await user.save();
         mfaVerified = true;

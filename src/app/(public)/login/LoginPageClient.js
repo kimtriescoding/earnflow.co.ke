@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function LoginPageClient() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function LoginPageClient() {
   const [otpAuthUrl, setOtpAuthUrl] = useState("");
   const [backupCodes, setBackupCodes] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   /** Initial email + password only */
   const credentialPhase = mfaMode === "none";
   /** Steps that need the OTP / code input */
@@ -63,8 +65,7 @@ export default function LoginPageClient() {
           return;
         }
         setMfaMode("verify");
-        setMessage("Enter your authenticator app code to continue.");
-        toast.info("MFA code required.");
+        setMessage("");
         return;
       }
 
@@ -80,8 +81,19 @@ export default function LoginPageClient() {
       }
       return;
     }
-    if (data?.mfaRequired) {
-      setMfaMode(data?.mfaSetupRequired ? "bootstrap" : "verify");
+    if (data?.mfaRequired && !data?.mfaSetupRequired) {
+      setMfaMode("verify");
+      if (data.mfaAwaitingCode) {
+        setMessage("");
+        return;
+      }
+      const msg = data.message || "Invalid authenticator code or backup code.";
+      setMessage(msg);
+      toast.error(msg);
+      return;
+    }
+    if (data?.mfaRequired && data?.mfaSetupRequired) {
+      setMfaMode("bootstrap");
     }
     const msg = data.message || "Login failed";
     setMessage(msg);
@@ -189,13 +201,24 @@ export default function LoginPageClient() {
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium">Password</span>
-                <input
-                  type="password"
-                  className="interactive-control focus-ring w-full px-3.5 py-2.5 text-sm"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    className="interactive-control focus-ring w-full px-3.5 py-2.5 pr-11 text-sm"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-[var(--foreground)] opacity-60 transition hover:opacity-100 focus-visible:outline focus-visible:ring-2 focus-visible:ring-[var(--brand)]"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" strokeWidth={2} /> : <Eye className="h-4 w-4" strokeWidth={2} />}
+                  </button>
+                </div>
               </label>
               <button type="submit" disabled={busy} className="primary-btn neon-ring w-full px-4 py-2.5 text-sm disabled:opacity-60">
                 {busy ? "Please wait..." : "Log in"}

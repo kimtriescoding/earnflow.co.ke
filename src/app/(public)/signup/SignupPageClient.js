@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { Eye, EyeOff } from "lucide-react";
 
 /** Persists invite ref across login ↔ signup until signup succeeds or a new ?ref= is opened. */
 const SIGNUP_REF_STORAGE_KEY = "taskwave_signup_referral";
@@ -13,6 +14,7 @@ export default function SignupPageClient() {
   const router = useRouter();
   const [form, setForm] = useState({ username: "", email: "", phoneNumber: "", password: "", referralCode: "" });
   const [message, setMessage] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [usernameRemoteStatus, setUsernameRemoteStatus] = useState({ state: "idle", text: "" });
   const [usernameSuggestions, setUsernameSuggestions] = useState([]);
   const usernameCheckCacheRef = useRef(new Map());
@@ -153,15 +155,17 @@ export default function SignupPageClient() {
                 label: referralLocked ? "Referral code (from your invite link)" : "Referral code (optional)",
                 type: "text",
               },
-            ].map((field) => (
-              <label key={field.key} className="block">
-                <span className="mb-1.5 block text-sm font-medium">{field.label}</span>
+            ].map((field) => {
+              const isPassword = field.key === "password";
+              const inputClassName = `interactive-control focus-ring w-full px-3.5 py-2.5 text-sm${
+                isPassword ? " pr-11" : ""
+              }${field.key === "referralCode" && referralLocked ? " cursor-not-allowed opacity-90" : ""}`;
+              const inputEl = (
                 <input
-                  className={`interactive-control focus-ring w-full px-3.5 py-2.5 text-sm${
-                    field.key === "referralCode" && referralLocked ? " cursor-not-allowed opacity-90" : ""
-                  }`}
+                  className={inputClassName}
                   placeholder={field.label}
-                  type={field.type}
+                  type={isPassword ? (showPassword ? "text" : "password") : field.type}
+                  autoComplete={isPassword ? "new-password" : undefined}
                   readOnly={field.key === "referralCode" && referralLocked}
                   aria-readonly={field.key === "referralCode" && referralLocked ? true : undefined}
                   value={
@@ -187,6 +191,25 @@ export default function SignupPageClient() {
                     setForm((p) => ({ ...p, [field.key]: nextValue }));
                   }}
                 />
+              );
+              return (
+              <label key={field.key} className="block">
+                <span className="mb-1.5 block text-sm font-medium">{field.label}</span>
+                {isPassword ? (
+                  <div className="relative">
+                    {inputEl}
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-[var(--foreground)] opacity-60 transition hover:opacity-100 focus-visible:outline focus-visible:ring-2 focus-visible:ring-[var(--brand)]"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" strokeWidth={2} /> : <Eye className="h-4 w-4" strokeWidth={2} />}
+                    </button>
+                  </div>
+                ) : (
+                  inputEl
+                )}
                 {field.key === "username" && usernameStatus.text ? (
                   <span
                     className={`mt-1.5 block text-xs ${
@@ -221,7 +244,8 @@ export default function SignupPageClient() {
                   </div>
                 ) : null}
               </label>
-            ))}
+              );
+            })}
             <button
               disabled={usernameStatus.state !== "available"}
               className="primary-btn neon-ring w-full px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
