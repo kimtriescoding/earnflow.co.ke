@@ -108,7 +108,7 @@ export default function AdminPage() {
           value={kes(summary.activationPaymentsToday)}
           hint="Money collected from activations today"
         />
-        <StatCard label="Total commission paid" value={kes(summary.totalCommissionsPaid)} hint="Referral payouts, all time" />
+        <StatCard label="Total commission paid today" value={kes(summary.commissionsPaidToday)} hint="Referral payouts today" />
         <StatCard
           label="Earnings today"
           value={kes(summary.earningsToday)}
