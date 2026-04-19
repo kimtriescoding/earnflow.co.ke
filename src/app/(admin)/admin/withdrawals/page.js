@@ -70,16 +70,29 @@ export default function AdminWithdrawalsPage() {
       field: "actions",
       header: "Actions",
       sortable: false,
-      render: (row) => (
-        <div className="flex gap-2">
-          <button className="secondary-btn px-2 py-1 text-xs" onClick={() => updateStatus(row._id, "approved")}>
-            Approve
-          </button>
-          <button className="secondary-btn px-2 py-1 text-xs" onClick={() => updateStatus(row._id, "rejected")}>
-            Reject
-          </button>
-        </div>
-      ),
+      render: (row) => {
+        const locked = row.status === "completed" || row.status === "failed";
+        return (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="secondary-btn px-2 py-1 text-xs disabled:opacity-40"
+              disabled={locked}
+              onClick={() => updateStatus(row._id, "approved")}
+            >
+              Approve
+            </button>
+            <button
+              type="button"
+              className="secondary-btn px-2 py-1 text-xs disabled:opacity-40"
+              disabled={locked}
+              onClick={() => updateStatus(row._id, "rejected")}
+            >
+              Reject
+            </button>
+          </div>
+        );
+      },
     },
   ];
 
