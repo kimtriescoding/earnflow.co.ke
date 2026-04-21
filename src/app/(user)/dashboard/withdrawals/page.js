@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserAppShell } from "@/components/user/UserAppShell";
 import { toast } from "sonner";
+import { DEFAULT_WITHDRAWAL_FEE_TIERS, computeWithdrawalFee, maxPayoutForBalance } from "@/lib/payments/withdrawal-fees";
 
 const REDIRECT_SECONDS = 4;
 
@@ -13,44 +14,6 @@ function wholeKesFromInput(raw) {
   if (!digits) return 0;
   const n = Number.parseInt(digits, 10);
   return Number.isFinite(n) && n >= 0 ? n : 0;
-}
-
-function withdrawalFeeForMpesaAmount(amount, feeMode, feeValue) {
-  const a = Math.max(0, Number(amount) || 0);
-  if (String(feeMode || "").toLowerCase() === "percentage") {
-    return Number(((a * Math.max(0, Number(feeValue || 0))) / 100).toFixed(2));
-  }
-  return Number(Math.max(0, Number(feeValue || 0)).toFixed(2));
-}
-
-function maxMpesaPayoutContinuous(balance, feeMode, feeValue) {
-  const B = Math.max(0, Number(balance) || 0);
-  if (B <= 0) return 0;
-  const mode = String(feeMode || "fixed").toLowerCase() === "percentage" ? "percentage" : "fixed";
-  if (mode === "fixed") {
-    const F = withdrawalFeeForMpesaAmount(0, "fixed", feeValue);
-    return Math.max(0, Number((B - F).toFixed(2)));
-  }
-  let lo = 0;
-  let hi = B;
-  for (let i = 0; i < 45; i++) {
-    const mid = Number(((lo + hi) / 2).toFixed(2));
-    const total = Number((mid + withdrawalFeeForMpesaAmount(mid, "percentage", feeValue)).toFixed(2));
-    if (total <= B + 0.0001) lo = mid;
-    else hi = mid;
-  }
-  return Number(lo.toFixed(2));
-}
-
-function maxMpesaPayoutForWallet(balance, feeMode, feeValue) {
-  const B = Math.max(0, Number(balance) || 0);
-  let p = Math.floor(maxMpesaPayoutContinuous(B, feeMode, feeValue));
-  while (p > 0) {
-    const total = Number((p + withdrawalFeeForMpesaAmount(p, feeMode, feeValue)).toFixed(2));
-    if (total <= B + 0.0001) break;
-    p -= 1;
-  }
-  return Math.max(0, p);
 }
 
 export default function WithdrawalsPage() {
@@ -66,6 +29,7 @@ export default function WithdrawalsPage() {
     minWithdrawal: 0,
     feeMode: "fixed",
     feeValue: 0,
+    feeTiers: DEFAULT_WITHDRAWAL_FEE_TIERS,
   });
 
   useEffect(() => {
@@ -80,6 +44,7 @@ export default function WithdrawalsPage() {
           minWithdrawal: Number(payoutData.data.minWithdrawal || 0),
           feeMode: String(payoutData.data.feeMode || "fixed"),
           feeValue: Number(payoutData.data.feeValue || 0),
+          feeTiers: Array.isArray(payoutData.data.feeTiers) ? payoutData.data.feeTiers : DEFAULT_WITHDRAWAL_FEE_TIERS,
         });
       }
     }, 0);
@@ -95,6 +60,7 @@ export default function WithdrawalsPage() {
         minWithdrawal: Number(payoutData.data.minWithdrawal || 0),
         feeMode: String(payoutData.data.feeMode || "fixed"),
         feeValue: Number(payoutData.data.feeValue || 0),
+          feeTiers: Array.isArray(payoutData.data.feeTiers) ? payoutData.data.feeTiers : DEFAULT_WITHDRAWAL_FEE_TIERS,
       });
     }
   }
@@ -116,8 +82,8 @@ export default function WithdrawalsPage() {
 
   const amountNum = wholeKesFromInput(form.amount);
   const balance = Number(payoutMeta.availableBalance || 0);
-  const estimatedFee = withdrawalFeeForMpesaAmount(amountNum, payoutMeta.feeMode, payoutMeta.feeValue);
-  const maxMpesaForBalance = maxMpesaPayoutForWallet(balance, payoutMeta.feeMode, payoutMeta.feeValue);
+  const estimatedFee = computeWithdrawalFee(amountNum, payoutMeta.feeMode, payoutMeta.feeValue, payoutMeta.feeTiers);
+  const maxMpesaForBalance = maxPayoutForBalance(balance, payoutMeta.feeMode, payoutMeta.feeValue, payoutMeta.feeTiers);
   const minW = Number(payoutMeta.minWithdrawal || 0);
   const maxMeetsMinimum = minW <= 0 || maxMpesaForBalance >= minW - 0.0001;
   const mpesaPayout = amountNum;
@@ -135,7 +101,7 @@ export default function WithdrawalsPage() {
       return;
     }
     const requestedAmount = wholeKesFromInput(form.amount);
-    const feePreview = withdrawalFeeForMpesaAmount(requestedAmount, payoutMeta.feeMode, payoutMeta.feeValue);
+    const feePreview = computeWithdrawalFee(requestedAmount, payoutMeta.feeMode, payoutMeta.feeValue, payoutMeta.feeTiers);
     const needFromWallet = Number((requestedAmount + feePreview).toFixed(2));
     if (requestedAmount <= 0) {
       toast.error("Enter a valid amount.");

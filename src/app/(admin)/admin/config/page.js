@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/ui/AppShell";
 import { adminNavItems } from "@/lib/nav/admin-nav";
 import { toast } from "sonner";
+import { DEFAULT_WITHDRAWAL_FEE_TIERS, sanitizeWithdrawalFeeTiers } from "@/lib/payments/withdrawal-fees";
 
 const MODULE_LABELS = {
   video: "Video",
@@ -19,6 +20,7 @@ export default function AdminConfigPage() {
   const [minWithdrawalAmount, setMinWithdrawalAmount] = useState(0);
   const [withdrawalFeeMode, setWithdrawalFeeMode] = useState("fixed");
   const [withdrawalFeeValue, setWithdrawalFeeValue] = useState(0);
+  const [withdrawalFeeTiers, setWithdrawalFeeTiers] = useState(DEFAULT_WITHDRAWAL_FEE_TIERS);
   const [zetupayPublicKey, setZetupayPublicKey] = useState("");
   const [zetupayPrivateKey, setZetupayPrivateKey] = useState("");
   const [zetupayWalletId, setZetupayWalletId] = useState("");
@@ -51,6 +53,7 @@ export default function AdminConfigPage() {
         if (map.min_withdrawal_amount !== undefined) setMinWithdrawalAmount(Number(map.min_withdrawal_amount || 0));
         if (map.withdrawal_fee_mode) setWithdrawalFeeMode(String(map.withdrawal_fee_mode));
         if (map.withdrawal_fee_value !== undefined) setWithdrawalFeeValue(Number(map.withdrawal_fee_value || 0));
+        if (map.withdrawal_fee_tiers !== undefined) setWithdrawalFeeTiers(sanitizeWithdrawalFeeTiers(map.withdrawal_fee_tiers));
         const gateway = map.zetupay_primary || map.wavepay_primary;
         if (gateway?.publicKey) setZetupayPublicKey(gateway.publicKey);
         if (gateway?.walletId) setZetupayWalletId(gateway.walletId);
@@ -97,8 +100,9 @@ export default function AdminConfigPage() {
       body: JSON.stringify({
         activation_fee: { amount: Number(activationFee), currency: "KES" },
         min_withdrawal_amount: Number(minWithdrawalAmount),
-        withdrawal_fee_mode: withdrawalFeeMode === "percentage" ? "percentage" : "fixed",
+        withdrawal_fee_mode: ["percentage", "tiers"].includes(withdrawalFeeMode) ? withdrawalFeeMode : "fixed",
         withdrawal_fee_value: Number(withdrawalFeeValue),
+        withdrawal_fee_tiers: sanitizeWithdrawalFeeTiers(withdrawalFeeTiers),
         zetupay_primary: credentialsPayload,
         referral_commissions: {
           level1: { enabled: levels.level1Enabled, amount: Number(levels.level1Amount) },
@@ -153,21 +157,66 @@ export default function AdminConfigPage() {
                 <select
                   className="interactive-control focus-ring px-3.5 py-2.5"
                   value={withdrawalFeeMode}
-                  onChange={(e) => setWithdrawalFeeMode(e.target.value === "percentage" ? "percentage" : "fixed")}
+                  onChange={(e) =>
+                    setWithdrawalFeeMode(["percentage", "tiers"].includes(e.target.value) ? e.target.value : "fixed")
+                  }
                 >
                   <option value="fixed">fixed</option>
                   <option value="percentage">percentage</option>
+                  <option value="tiers">tiers</option>
                 </select>
               </label>
-              <label className="grid gap-1 text-sm">
-                <span className="muted-text">Withdrawal fee value ({withdrawalFeeMode === "percentage" ? "%" : "KES"})</span>
-                <input
-                  className="interactive-control focus-ring px-3.5 py-2.5"
-                  value={withdrawalFeeValue}
-                  onChange={(e) => setWithdrawalFeeValue(e.target.value)}
-                />
-              </label>
+              {withdrawalFeeMode !== "tiers" ? (
+                <label className="grid gap-1 text-sm">
+                  <span className="muted-text">Withdrawal fee value ({withdrawalFeeMode === "percentage" ? "%" : "KES"})</span>
+                  <input
+                    className="interactive-control focus-ring px-3.5 py-2.5"
+                    value={withdrawalFeeValue}
+                    onChange={(e) => setWithdrawalFeeValue(e.target.value)}
+                  />
+                </label>
+              ) : null}
             </div>
+            {withdrawalFeeMode === "tiers" ? (
+              <div className="mt-3 space-y-2">
+                {withdrawalFeeTiers.map((tier, index) => (
+                  <div key={`${tier.minAmount}-${tier.maxAmount}-${index}`} className="grid gap-2 md:grid-cols-3">
+                    <input
+                      className="interactive-control focus-ring px-3.5 py-2.5 text-sm"
+                      value={tier.minAmount}
+                      onChange={(e) =>
+                        setWithdrawalFeeTiers((prev) =>
+                          prev.map((item, i) => (i === index ? { ...item, minAmount: Number(e.target.value || 0) } : item))
+                        )
+                      }
+                      placeholder="Min amount"
+                    />
+                    <input
+                      className="interactive-control focus-ring px-3.5 py-2.5 text-sm"
+                      value={tier.maxAmount == null ? "" : tier.maxAmount}
+                      onChange={(e) =>
+                        setWithdrawalFeeTiers((prev) =>
+                          prev.map((item, i) =>
+                            i === index ? { ...item, maxAmount: e.target.value === "" ? null : Number(e.target.value || 0) } : item
+                          )
+                        )
+                      }
+                      placeholder="Max amount (blank = no cap)"
+                    />
+                    <input
+                      className="interactive-control focus-ring px-3.5 py-2.5 text-sm"
+                      value={tier.fee}
+                      onChange={(e) =>
+                        setWithdrawalFeeTiers((prev) =>
+                          prev.map((item, i) => (i === index ? { ...item, fee: Number(e.target.value || 0) } : item))
+                        )
+                      }
+                      placeholder="Tier fee (KES)"
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </section>
 
           <section className="rounded-2xl border bg-[var(--surface-soft)] p-4">

@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/auth/guards";
 import { ok } from "@/lib/api";
 import { getEnv } from "@/lib/env";
 import { deleteCache } from "@/lib/cache/config-cache";
+import { sanitizeWithdrawalFeeTiers, normalizeWithdrawalFeeMode } from "@/lib/payments/withdrawal-fees";
 
 export async function GET() {
   const auth = await requireAuth(["admin", "support"]);
@@ -67,6 +68,15 @@ export async function POST(request) {
     const incoming = { ...body.wavepay_primary };
     if (!incoming.privateKey) delete incoming.privateKey;
     body.wavepay_primary = { ...(existing?.value || {}), ...incoming };
+  }
+  if (body.withdrawal_fee_mode !== undefined) {
+    body.withdrawal_fee_mode = normalizeWithdrawalFeeMode(body.withdrawal_fee_mode);
+  }
+  if (body.withdrawal_fee_value !== undefined) {
+    body.withdrawal_fee_value = Math.max(0, Number(body.withdrawal_fee_value || 0));
+  }
+  if (body.withdrawal_fee_tiers !== undefined) {
+    body.withdrawal_fee_tiers = sanitizeWithdrawalFeeTiers(body.withdrawal_fee_tiers);
   }
   const entries = Object.entries(body);
   await Promise.all(

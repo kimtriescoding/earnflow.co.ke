@@ -6,24 +6,33 @@ import { getSetting, getZetupayCredentials } from "@/models/Settings";
 import { requireAuth } from "@/lib/auth/guards";
 import { initiatePayout } from "@/lib/payments/wavepay";
 import { ok, fail } from "@/lib/api";
+import {
+  DEFAULT_WITHDRAWAL_FEE_TIERS,
+  computeWithdrawalFee,
+  normalizeWithdrawalFeeMode,
+  sanitizeWithdrawalFeeTiers,
+} from "@/lib/payments/withdrawal-fees";
 
 export async function GET() {
   const auth = await requireAuth(["user", "admin"]);
   if (auth.error) return auth.error;
   await connectDB();
-  const [wallet, minWithdrawal, feeMode, feeValue] = await Promise.all([
+  const [wallet, minWithdrawal, feeMode, feeValue, feeTiers] = await Promise.all([
     Wallet.findOne({ userId: auth.payload.sub }).select("availableBalance").lean(),
     getSetting("min_withdrawal_amount", 0),
     getSetting("withdrawal_fee_mode", "fixed"),
     getSetting("withdrawal_fee_value", 0),
+    getSetting("withdrawal_fee_tiers", DEFAULT_WITHDRAWAL_FEE_TIERS),
   ]);
-  const normalizedFeeMode = String(feeMode || "fixed").toLowerCase() === "percentage" ? "percentage" : "fixed";
+  const normalizedFeeMode = normalizeWithdrawalFeeMode(feeMode);
+  const normalizedFeeTiers = sanitizeWithdrawalFeeTiers(feeTiers);
   return ok({
     data: {
       availableBalance: Number(wallet?.availableBalance || 0),
       minWithdrawal: Number(minWithdrawal || 0),
       feeMode: normalizedFeeMode,
       feeValue: Math.max(0, Number(feeValue || 0)),
+      feeTiers: normalizedFeeTiers,
     },
   });
 }
@@ -47,18 +56,20 @@ export async function POST(request) {
   if (pendingWithdrawal) {
     return fail("You already have a pending withdrawal. Wait until it finishes before starting another.", 409);
   }
-  const [minWithdrawal, feeMode, feeValue] = await Promise.all([
+  const [minWithdrawal, feeMode, feeValue, feeTiers] = await Promise.all([
     getSetting("min_withdrawal_amount", 0),
     getSetting("withdrawal_fee_mode", "fixed"),
     getSetting("withdrawal_fee_value", 0),
+    getSetting("withdrawal_fee_tiers", DEFAULT_WITHDRAWAL_FEE_TIERS),
   ]);
   const minAmount = Number(minWithdrawal || 0);
   if (minAmount > 0 && amount < minAmount) {
     return fail(`Minimum withdrawal is KES ${minAmount.toFixed(2)}`);
   }
-  const normalizedFeeMode = String(feeMode || "fixed").toLowerCase() === "percentage" ? "percentage" : "fixed";
+  const normalizedFeeMode = normalizeWithdrawalFeeMode(feeMode);
   const feeValueNum = Math.max(0, Number(feeValue || 0));
-  const computedFee = normalizedFeeMode === "percentage" ? Number(((amount * feeValueNum) / 100).toFixed(2)) : Number(feeValueNum.toFixed(2));
+  const normalizedFeeTiers = sanitizeWithdrawalFeeTiers(feeTiers);
+  const computedFee = computeWithdrawalFee(amount, normalizedFeeMode, feeValueNum, normalizedFeeTiers);
   const totalDeduction = Number((amount + computedFee).toFixed(2));
   const walletBefore = await Wallet.findOne({ userId: auth.payload.sub }).select("availableBalance").lean();
   const available = Number(walletBefore?.availableBalance || 0);
@@ -86,6 +97,7 @@ export async function POST(request) {
       metadata: {
         feeMode: normalizedFeeMode,
         feeValue: feeValueNum,
+        feeTiers: normalizedFeeTiers,
         totalDeduction,
         balanceReserved: true,
         balanceReservedAt: new Date(),
