@@ -1,6 +1,7 @@
 import connectDB from "@/lib/db";
 import User from "@/models/User";
 import Wallet from "@/models/Wallet";
+import { getSetting } from "@/models/Settings";
 import { requireAuth } from "@/lib/auth/guards";
 import { ok, fail } from "@/lib/api";
 import { Types } from "mongoose";
@@ -82,13 +83,15 @@ export async function GET(request) {
   const userFilter = { ...searchFilter, ...activationPart };
   const withdrawableOnly = parseWithdrawableOnly(searchParams);
   const useAggPath = withdrawableOnly || safeSortBy === "withdrawableBalance";
+  const minWithdrawalAmount = Number((await getSetting("min_withdrawal_amount", 0)) ?? 0) || 0;
+  const withdrawableMatch = { withdrawableBalance: { $gte: minWithdrawalAmount } };
 
   const [total, activated, blocked, elevatedRoleCount] = await Promise.all([
     useAggPath
       ? User.aggregate([
           { $match: userFilter },
           ...walletLookupStages,
-          ...(withdrawableOnly ? [{ $match: { withdrawableBalance: { $gt: 0 } } }] : []),
+          ...(withdrawableOnly ? [{ $match: withdrawableMatch }] : []),
           { $count: "n" },
         ]).then((r) => (r[0]?.n ? Number(r[0].n) : 0))
       : User.countDocuments(userFilter),
@@ -111,7 +114,7 @@ export async function GET(request) {
     const [facetResult] = await User.aggregate([
       { $match: userFilter },
       ...walletLookupStages,
-      ...(withdrawableOnly ? [{ $match: { withdrawableBalance: { $gt: 0 } } }] : []),
+          ...(withdrawableOnly ? [{ $match: withdrawableMatch }] : []),
       {
         $facet: {
           meta: [{ $group: { _id: null, totalWithdrawableKes: { $sum: "$withdrawableBalance" } } }],
@@ -167,6 +170,7 @@ export async function GET(request) {
       blocked,
       elevatedRoleCount,
       totalWithdrawableKes,
+      minWithdrawalAmount,
     },
   });
 }

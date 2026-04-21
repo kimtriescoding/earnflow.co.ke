@@ -63,7 +63,7 @@ function LeaderboardRow({ rank, userId, username, email, amount }) {
 export default function AdminUsersPage() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
-  const [summary, setSummary] = useState({ activated: 0, elevatedRoleCount: 0, totalWithdrawableKes: 0 });
+  const [summary, setSummary] = useState({ activated: 0, elevatedRoleCount: 0, totalWithdrawableKes: 0, minWithdrawalAmount: 0 });
   const [topLifetimeEarners, setTopLifetimeEarners] = useState([]);
   const [topWithdrawable, setTopWithdrawable] = useState([]);
   const [page, setPage] = useState(1);
@@ -96,6 +96,7 @@ export default function AdminUsersPage() {
           activated: Number(data.summary?.activated || 0),
           elevatedRoleCount: Number(data.summary?.elevatedRoleCount || 0),
           totalWithdrawableKes: Number(data.summary?.totalWithdrawableKes || 0),
+          minWithdrawalAmount: Number(data.summary?.minWithdrawalAmount ?? 0),
         });
       });
   }, [query]);
@@ -250,18 +251,28 @@ export default function AdminUsersPage() {
             <option value="inactive">Not activated</option>
           </select>
         </label>
-        <label className="flex cursor-pointer items-center gap-2.5 self-start sm:self-center">
-          <input
-            type="checkbox"
-            checked={withdrawableOnly}
-            onChange={(e) => {
-              setPage(1);
-              setWithdrawableOnly(e.target.checked);
-            }}
-            className="h-4 w-4 shrink-0 rounded border-[var(--border)] accent-[var(--brand)]"
-          />
-          <span className="text-sm leading-snug">Has withdrawable balance</span>
-        </label>
+        <div className="flex flex-col gap-1.5 self-start sm:self-center sm:items-end">
+          <span className="text-xs font-semibold uppercase tracking-[0.12em] muted-text">Withdrawal eligibility</span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={withdrawableOnly}
+              onClick={() => {
+                setPage(1);
+                setWithdrawableOnly((v) => !v);
+              }}
+              className={`inline-flex h-7 w-11 shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] ${
+                withdrawableOnly ? "justify-end bg-[var(--brand)]" : "justify-start bg-[color-mix(in_oklab,var(--border)_75%,var(--surface))]"
+              }`}
+            >
+              <span className="pointer-events-none block h-5 w-5 rounded-full bg-white shadow" aria-hidden />
+            </button>
+            <span className="max-w-[14rem] text-sm leading-snug">
+              Balance ≥ min withdrawal (KES {Number(summary.minWithdrawalAmount || 0).toFixed(2)})
+            </span>
+          </div>
+        </div>
       </div>
 
       <div className="mt-4">

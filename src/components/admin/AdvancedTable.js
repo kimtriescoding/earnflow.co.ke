@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
+import { LayoutGrid, Table } from "lucide-react";
 
 export function AdvancedTable({
   columns,
@@ -17,9 +18,11 @@ export function AdvancedTable({
   loading = false,
   emptyLabel = "No records found.",
   title = "Records",
+  showMobileLayoutToggle = true,
 }) {
   const totalPages = useMemo(() => Math.max(1, Math.ceil((total || 0) / pageSize)), [total, pageSize]);
   const [value, setValue] = useState(search || "");
+  const [mobileLayout, setMobileLayout] = useState("cards");
   const tableColumns = useMemo(
     () =>
       columns.map((column) => ({
@@ -60,12 +63,51 @@ export function AdvancedTable({
   const actionColumns = useMemo(() => columns.filter((column) => column.field === "actions"), [columns]);
   const dataColumns = useMemo(() => columns.filter((column) => column.field !== "actions"), [columns]);
 
+  const showCardsOnMobile = !showMobileLayoutToggle || mobileLayout === "cards";
+  const showTableOnMobile = !showMobileLayoutToggle || mobileLayout === "table";
+
   return (
     <section className="card-surface neon-outline rounded-[var(--radius-panel)] section-card">
-      <div className="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
-        <div>
-          <h2 className="section-title">{title}</h2>
-          <p className="text-sm muted-text">{total} records</p>
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-start justify-between gap-3 md:block">
+          <div className="min-w-0">
+            <h2 className="section-title">{title}</h2>
+            <p className="text-sm muted-text">{total} records</p>
+          </div>
+          {showMobileLayoutToggle ? (
+            <div
+              className="flex shrink-0 rounded-xl border border-[color-mix(in_oklab,var(--border)_55%,transparent)] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] p-0.5 md:hidden"
+              role="group"
+              aria-label="Layout on small screens"
+            >
+              <button
+                type="button"
+                title="Card view"
+                aria-pressed={mobileLayout === "cards"}
+                onClick={() => setMobileLayout("cards")}
+                className={`rounded-lg p-2 transition-colors ${
+                  mobileLayout === "cards"
+                    ? "bg-[color-mix(in_srgb,var(--brand)_22%,transparent)] text-[var(--brand)]"
+                    : "text-[var(--muted)] hover:text-[var(--foreground)]"
+                }`}
+              >
+                <LayoutGrid className="h-4 w-4" aria-hidden strokeWidth={mobileLayout === "cards" ? 2.25 : 2} />
+              </button>
+              <button
+                type="button"
+                title="Table view"
+                aria-pressed={mobileLayout === "table"}
+                onClick={() => setMobileLayout("table")}
+                className={`rounded-lg p-2 transition-colors ${
+                  mobileLayout === "table"
+                    ? "bg-[color-mix(in_srgb,var(--brand)_22%,transparent)] text-[var(--brand)]"
+                    : "text-[var(--muted)] hover:text-[var(--foreground)]"
+                }`}
+              >
+                <Table className="h-4 w-4" aria-hidden strokeWidth={mobileLayout === "table" ? 2.25 : 2} />
+              </button>
+            </div>
+          ) : null}
         </div>
         <form
           onSubmit={(e) => {
@@ -86,7 +128,7 @@ export function AdvancedTable({
         </form>
       </div>
 
-      <div className="grid gap-3 md:hidden">
+      <div className={`grid gap-3 md:hidden ${showCardsOnMobile ? "" : "hidden"}`}>
         {loading ? (
           <div className="rounded-2xl border bg-[var(--surface)] px-3 py-6 text-center text-sm muted-text">Loading...</div>
         ) : (rows || []).length ? (
@@ -120,7 +162,11 @@ export function AdvancedTable({
         )}
       </div>
 
-      <div className="hidden overflow-x-auto rounded-2xl border border-[color-mix(in_srgb,var(--brand)_22%,var(--border))] md:block">
+      <div
+        className={`overflow-x-auto rounded-2xl border border-[color-mix(in_srgb,var(--brand)_22%,var(--border))] md:block ${
+          showTableOnMobile ? "block" : "hidden"
+        }`}
+      >
         <table className="min-w-full text-sm">
           <thead className="bg-[linear-gradient(135deg,color-mix(in_srgb,var(--brand)_12%,var(--surface-soft)),color-mix(in_srgb,var(--accent)_10%,var(--surface-soft)))]">
             {table.getHeaderGroups().map((headerGroup) => (
