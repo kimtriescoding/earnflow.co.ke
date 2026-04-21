@@ -63,18 +63,28 @@ function LeaderboardRow({ rank, userId, username, email, amount }) {
 export default function AdminUsersPage() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
-  const [summary, setSummary] = useState({ activated: 0, elevatedRoleCount: 0 });
+  const [summary, setSummary] = useState({ activated: 0, elevatedRoleCount: 0, totalWithdrawableKes: 0 });
   const [topLifetimeEarners, setTopLifetimeEarners] = useState([]);
   const [topWithdrawable, setTopWithdrawable] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [search, setSearch] = useState("");
   const [sortState, setSortState] = useState({ field: "createdAt", direction: "desc" });
+  const [activation, setActivation] = useState("all");
+  const [withdrawableOnly, setWithdrawableOnly] = useState(false);
 
-  const query = useMemo(
-    () => new URLSearchParams({ page: String(page), pageSize: String(pageSize), search, sortBy: sortState.field, sortDir: sortState.direction }),
-    [page, pageSize, search, sortState]
-  );
+  const query = useMemo(() => {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+      search,
+      sortBy: sortState.field,
+      sortDir: sortState.direction,
+    });
+    if (activation && activation !== "all") params.set("activation", activation);
+    if (withdrawableOnly) params.set("withdrawableOnly", "true");
+    return params;
+  }, [page, pageSize, search, sortState, activation, withdrawableOnly]);
 
   useEffect(() => {
     fetch(`/api/admin/users?${query.toString()}`)
@@ -85,6 +95,7 @@ export default function AdminUsersPage() {
         setSummary({
           activated: Number(data.summary?.activated || 0),
           elevatedRoleCount: Number(data.summary?.elevatedRoleCount || 0),
+          totalWithdrawableKes: Number(data.summary?.totalWithdrawableKes || 0),
         });
       });
   }, [query]);
@@ -154,7 +165,7 @@ export default function AdminUsersPage() {
 
   return (
     <AppShell title="User Management" navItems={adminNavItems}>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="card-surface rounded-3xl section-card">
           <p className="text-xs uppercase tracking-[0.12em] muted-text">Listed users</p>
           <p className="heading-display mt-2 text-2xl font-semibold">{total}</p>
@@ -168,6 +179,11 @@ export default function AdminUsersPage() {
           <p className="text-xs uppercase tracking-[0.12em] muted-text">Admin + support users</p>
           <p className="heading-display mt-2 text-2xl font-semibold">{summary.elevatedRoleCount}</p>
           <p className="mt-1 text-xs muted-text">Across full result set</p>
+        </div>
+        <div className="card-surface rounded-3xl section-card">
+          <p className="text-xs uppercase tracking-[0.12em] muted-text">Total withdrawable (KES)</p>
+          <p className="heading-display mt-2 text-2xl font-semibold tabular-nums">KES {Number(summary.totalWithdrawableKes || 0).toFixed(2)}</p>
+          <p className="mt-1 text-xs muted-text">For the filtered list cohort</p>
         </div>
       </div>
 
@@ -218,22 +234,54 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
-      <AdvancedTable
-        title="All users"
-        columns={columns}
-        rows={rows}
-        total={total}
-        page={page}
-        pageSize={pageSize}
-        search={search}
-        sortState={sortState}
-        onSearchChange={(v) => {
-          setPage(1);
-          setSearch(v);
-        }}
-        onSortChange={setSortState}
-        onPageChange={setPage}
-      />
+      <div className="mt-4 flex flex-col gap-3 rounded-3xl border border-[color-mix(in_oklab,var(--border)_40%,transparent)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <label className="flex min-w-0 flex-col gap-1.5 sm:max-w-xs">
+          <span className="text-xs font-semibold uppercase tracking-[0.12em] muted-text">Activation</span>
+          <select
+            value={activation}
+            onChange={(e) => {
+              setPage(1);
+              setActivation(e.target.value);
+            }}
+            className="interactive-control focus-ring w-full px-3 py-2 text-sm sm:w-auto"
+          >
+            <option value="all">All users</option>
+            <option value="active">Activated</option>
+            <option value="inactive">Not activated</option>
+          </select>
+        </label>
+        <label className="flex cursor-pointer items-center gap-2.5 self-start sm:self-center">
+          <input
+            type="checkbox"
+            checked={withdrawableOnly}
+            onChange={(e) => {
+              setPage(1);
+              setWithdrawableOnly(e.target.checked);
+            }}
+            className="h-4 w-4 shrink-0 rounded border-[var(--border)] accent-[var(--brand)]"
+          />
+          <span className="text-sm leading-snug">Has withdrawable balance</span>
+        </label>
+      </div>
+
+      <div className="mt-4">
+        <AdvancedTable
+          title="All users"
+          columns={columns}
+          rows={rows}
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          search={search}
+          sortState={sortState}
+          onSearchChange={(v) => {
+            setPage(1);
+            setSearch(v);
+          }}
+          onSortChange={setSortState}
+          onPageChange={setPage}
+        />
+      </div>
     </AppShell>
   );
 }
