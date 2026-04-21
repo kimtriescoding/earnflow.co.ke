@@ -16,7 +16,7 @@ const MODULE_LABELS = {
 };
 
 export default function AdminConfigPage() {
-  const [activationFee, setActivationFee] = useState(1000);
+  const [activationFee, setActivationFee] = useState(90);
   const [minWithdrawalAmount, setMinWithdrawalAmount] = useState(0);
   const [withdrawalFeeMode, setWithdrawalFeeMode] = useState("fixed");
   const [withdrawalFeeValue, setWithdrawalFeeValue] = useState(0);
@@ -26,11 +26,11 @@ export default function AdminConfigPage() {
   const [zetupayWalletId, setZetupayWalletId] = useState("");
   const [levels, setLevels] = useState({
     level1Enabled: true,
-    level1Amount: 100,
-    level2Enabled: true,
-    level2Amount: 50,
-    level3Enabled: true,
-    level3Amount: 25,
+    level1Amount: 70,
+    level2Enabled: false,
+    level2Amount: 0,
+    level3Enabled: false,
+    level3Amount: 0,
   });
   const [modules, setModules] = useState({
     video: true,
