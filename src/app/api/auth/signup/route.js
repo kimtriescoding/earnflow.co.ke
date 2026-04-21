@@ -19,8 +19,14 @@ export async function POST(request) {
   const phoneNumber = String(body.phoneNumber || "").trim();
   const password = String(body.password || "");
   if (!username || !email || password.length < 6) return fail("username, email and password are required");
-  const exists = await User.findOne({ $or: [{ username }, { email }] }).lean();
-  if (exists) return fail("Username or email already taken", 409);
+  const exists = await User.findOne({ $or: [{ username }, { email }] })
+    .select("username email")
+    .lean();
+  if (exists) {
+    if (String(exists.email || "").toLowerCase() === email) return fail("Email already taken", 409);
+    if (String(exists.username || "").toLowerCase() === username) return fail("Username already taken", 409);
+    return fail("Username or email already taken", 409);
+  }
   const hierarchy = await resolveReferralHierarchy(String(body.referralCode || "").trim().toLowerCase());
   const user = await User.create({
     username,
