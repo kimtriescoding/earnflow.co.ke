@@ -124,6 +124,12 @@ export default function SignupPageClient() {
       toast.error(msg);
       return;
     }
+    if (String(form.password || "").length < 6) {
+      const msg = "Password must be at least 6 characters.";
+      setMessage(msg);
+      toast.error(msg);
+      return;
+    }
     const referralPayload = referralLocked
       ? inviteReferralCode
       : String(form.referralCode || "").trim().toLowerCase();
@@ -179,6 +185,7 @@ export default function SignupPageClient() {
                   className={inputClassName}
                   placeholder={field.label}
                   type={isPassword ? (showPassword ? "text" : "password") : field.type}
+                  minLength={isPassword ? 6 : undefined}
                   autoComplete={isPassword ? "new-password" : undefined}
                   readOnly={field.key === "referralCode" && referralLocked}
                   aria-readonly={field.key === "referralCode" && referralLocked ? true : undefined}

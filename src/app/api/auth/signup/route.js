@@ -18,7 +18,8 @@ export async function POST(request) {
   const email = String(body.email || "").trim().toLowerCase();
   const phoneNumber = String(body.phoneNumber || "").trim();
   const password = String(body.password || "");
-  if (!username || !email || password.length < 6) return fail("username, email and password are required");
+  if (!username || !email) return fail("Username and email are required");
+  if (password.length < 6) return fail("Password must be at least 6 characters");
   const exists = await User.findOne({ $or: [{ username }, { email }] })
     .select("username email")
     .lean();
