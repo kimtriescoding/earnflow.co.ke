@@ -7,6 +7,7 @@ import Transaction from "@/models/Transaction";
 import { requireAuth } from "@/lib/auth/guards";
 import { ok, fail } from "@/lib/api";
 import Withdrawal from "@/models/Withdrawal";
+import { hashPassword } from "@/lib/auth/password";
 
 export async function GET(request, { params }) {
   const auth = await requireAuth(["admin", "support"]);
@@ -102,6 +103,11 @@ export async function PATCH(request, { params }) {
   if (body.username) {
     updates.username = String(body.username).trim().toLowerCase();
     updates.referralCode = String(body.username).trim().toLowerCase();
+  }
+  if (body.password !== undefined) {
+    const password = String(body.password || "");
+    if (password.length < 6) return fail("Password must be at least 6 characters.", 400);
+    updates.passwordHash = await hashPassword(password);
   }
   await User.findByIdAndUpdate(userId, updates);
   return ok({ message: "User updated" });

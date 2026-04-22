@@ -14,6 +14,8 @@ export default function AdminUserDetailPage() {
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState({ username: "", email: "", phoneNumber: "", role: "user" });
+  const [passwordReset, setPasswordReset] = useState({ password: "", confirmPassword: "" });
+  const [showResetPassword, setShowResetPassword] = useState(false);
   const [activityTab, setActivityTab] = useState("transactions");
 
   const user = payload?.user;
@@ -144,6 +146,35 @@ export default function AdminUserDetailPage() {
     }
   }
 
+  async function resetPassword() {
+    const password = String(passwordReset.password || "");
+    const confirmPassword = String(passwordReset.confirmPassword || "");
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match.");
+      return;
+    }
+
+    const confirmed = window.confirm("Reset this user's password?");
+    if (!confirmed) return;
+
+    const res = await fetch(`/api/admin/users/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast.success("Password reset successful.");
+      setPasswordReset({ password: "", confirmPassword: "" });
+    } else {
+      toast.error(data.message || "Password reset failed.");
+    }
+  }
+
   return (
     <AppShell title="User Detail & Actions" navItems={adminNavItems}>
       <div className="card-surface rounded-3xl section-card">
@@ -249,6 +280,35 @@ export default function AdminUserDetailPage() {
               <div className="mt-4 text-sm muted-text">
                 <p>Status: {user.isBlocked ? "Blocked" : "Active"}</p>
                 <p>Activation: {user.isActivated ? "Activated" : "Not activated"}</p>
+              </div>
+              <div className="mt-4 grid gap-2 border-t border-[var(--border)] pt-4">
+                <p className="text-xs uppercase tracking-[0.12em] muted-text">Reset user password</p>
+                <input
+                  type={showResetPassword ? "text" : "password"}
+                  className="interactive-control focus-ring px-3.5 py-2.5 text-sm"
+                  value={passwordReset.password}
+                  onChange={(e) => setPasswordReset((p) => ({ ...p, password: e.target.value }))}
+                  placeholder="New password"
+                />
+                <input
+                  type={showResetPassword ? "text" : "password"}
+                  className="interactive-control focus-ring px-3.5 py-2.5 text-sm"
+                  value={passwordReset.confirmPassword}
+                  onChange={(e) => setPasswordReset((p) => ({ ...p, confirmPassword: e.target.value }))}
+                  placeholder="Confirm new password"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowResetPassword((v) => !v)}
+                    className="secondary-btn w-fit px-4 py-2 text-sm"
+                  >
+                    {showResetPassword ? "Hide password" : "Show password"}
+                  </button>
+                  <button onClick={resetPassword} className="secondary-btn w-fit px-4 py-2 text-sm">
+                    Reset password
+                  </button>
+                </div>
               </div>
             </div>
           </div>
