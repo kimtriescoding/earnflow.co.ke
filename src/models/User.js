@@ -8,7 +8,7 @@ const schema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, index: true, lowercase: true },
     phoneNumber: { type: String, default: "", index: true },
     passwordHash: { type: String, required: true },
-    role: { type: String, enum: ["user", "client", "admin", "support"], default: "user" },
+    role: { type: String, enum: ["user", "client", "admin", "support", "superadmin"], default: "user" },
     isActivated: { type: Boolean, default: false, index: true },
     isBlocked: { type: Boolean, default: false },
     mfaEnabled: { type: Boolean, default: false, index: true },

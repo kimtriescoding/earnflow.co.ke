@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, LogOut, UserRound, Undo2 } from "lucide-react";
 import { toast } from "sonner";
+import { ROLE } from "@/lib/auth/roles";
 
 export function HeaderProfileMenu({ compact = false }) {
   const [profile, setProfile] = useState({ username: "User", role: "user", impersonatedBy: null });
@@ -52,12 +53,11 @@ export function HeaderProfileMenu({ compact = false }) {
     window.location.href = "/admin/users";
   }
 
-  const profileHref =
-    profile.role === "admin" || profile.role === "support"
-      ? "/admin/profile"
-      : profile.role === "client"
-        ? "/client/profile"
-        : "/profile";
+  const profileHref = [ROLE.ADMIN, ROLE.SUPPORT, ROLE.SUPERADMIN].includes(String(profile.role || ""))
+    ? "/admin/profile"
+    : profile.role === "client"
+      ? "/client/profile"
+      : "/profile";
 
   return (
     <div className="relative">

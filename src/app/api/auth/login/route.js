@@ -7,6 +7,7 @@ import { hashBackupCode, verifyTotp } from "@/lib/auth/totp";
 import { createMfaBootstrapOtp } from "@/lib/auth/mfa-bootstrap";
 import { sendMfaSetupOtpEmail } from "@/lib/email-utils";
 import { logError } from "@/lib/observability/logger";
+import { isElevatedRole } from "@/lib/auth/roles";
 
 export async function POST(request) {
   try {
@@ -26,7 +27,7 @@ export async function POST(request) {
     if (user.isBlocked) return fail("Account blocked", 403);
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) return fail("Invalid credentials", 401);
-    const isPrivileged = ["admin", "support"].includes(user.role);
+    const isPrivileged = isElevatedRole(user.role);
     let mfaVerified = true;
     let otpEmailSent = false;
     if (isPrivileged) {

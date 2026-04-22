@@ -16,6 +16,7 @@ import {
   normalizeModuleAccess,
   stripDisabledModuleStats,
 } from "@/lib/modules/module-access";
+import { MATCH_TRANSACTION_REAL_FOR_REVENUE } from "@/lib/payments/transaction-real";
 
 export async function GET() {
   const auth = await requireAuth(["user", "admin"]);
@@ -72,6 +73,7 @@ export async function GET() {
           type: "referral_signup_bonus",
           status: "completed",
           amount: { $gt: 0 },
+          ...MATCH_TRANSACTION_REAL_FOR_REVENUE,
           ...(linkedReferralLedgerIds.length ? { _id: { $nin: linkedReferralLedgerIds } } : {}),
         },
       },
@@ -89,7 +91,9 @@ export async function GET() {
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]),
     User.countDocuments({ referredByUserId: userIdStr }),
-    Transaction.find({ userId: userIdStr, type: "withdrawal", status: "completed" }).select("amount").lean(),
+    Transaction.find({ userId: userIdStr, type: "withdrawal", status: "completed", ...MATCH_TRANSACTION_REAL_FOR_REVENUE })
+      .select("amount")
+      .lean(),
     User.findById(userIdStr).select("referralCode username").lean(),
     sumTodaysEarningsForUser(userIdStr, { moduleAccess }),
   ]);

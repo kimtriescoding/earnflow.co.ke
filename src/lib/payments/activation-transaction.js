@@ -5,7 +5,7 @@ import Transaction from "@/models/Transaction";
  * Does not change in-app wallet or `User.balance` — that money never entered the app wallet, so deducting again would double-hit the user.
  * The row is for activity / statements only (money out vs off-platform payment).
  */
-export async function recordActivationFeeDebit({ userId, paidAmount, activationPaymentId, reference }) {
+export async function recordActivationFeeDebit({ userId, paidAmount, activationPaymentId, reference, real = true }) {
   const paid = Number(paidAmount || 0);
   if (!Number.isFinite(paid) || paid <= 0) return;
   const apId = String(activationPaymentId || "");
@@ -17,6 +17,7 @@ export async function recordActivationFeeDebit({ userId, paidAmount, activationP
       amount: -paid,
       description: "Account activation fee (paid via checkout)",
       status: "completed",
+      real,
       metadata: {
         activationPaymentId: apId,
         reference: String(reference || ""),

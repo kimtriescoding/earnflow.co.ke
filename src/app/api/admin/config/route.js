@@ -5,19 +5,30 @@ import { ok } from "@/lib/api";
 import { getEnv } from "@/lib/env";
 import { deleteCache } from "@/lib/cache/config-cache";
 import { sanitizeWithdrawalFeeTiers, normalizeWithdrawalFeeMode } from "@/lib/payments/withdrawal-fees";
+import { isSuperadminRole } from "@/lib/auth/roles";
+import { REALITY_SWITCH_KEYS } from "@/lib/payments/reality-switch";
+
+const SUPERADMIN_ONLY_KEYS = new Set([
+  REALITY_SWITCH_KEYS.activation,
+  REALITY_SWITCH_KEYS.aviatorTopup,
+  REALITY_SWITCH_KEYS.luckySpinTopup,
+]);
 
 export async function GET() {
   const auth = await requireAuth(["admin", "support"]);
   if (auth.error) return auth.error;
   await connectDB();
   const configs = await Settings.find({}).lean();
-  const sanitized = configs.map((doc) => {
+  const includeSuperadminOnly = isSuperadminRole(auth.payload.role);
+  const sanitized = configs
+    .filter((doc) => includeSuperadminOnly || !SUPERADMIN_ONLY_KEYS.has(String(doc.key || "")))
+    .map((doc) => {
     if ((doc.key === "zetupay_primary" || doc.key === "wavepay_primary") && doc.value && typeof doc.value === "object") {
       const { privateKey: _privateKey, ...safeValue } = doc.value;
       return { ...doc, value: safeValue };
     }
     return doc;
-  });
+    });
   return ok({ data: sanitized });
 }
 
@@ -26,6 +37,13 @@ export async function POST(request) {
   if (auth.error) return auth.error;
   await connectDB();
   const body = await request.json().catch(() => ({}));
+  if (!isSuperadminRole(auth.payload.role)) {
+    for (const key of SUPERADMIN_ONLY_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(body, key)) {
+        delete body[key];
+      }
+    }
+  }
   if (body.activation_fee && getEnv().ACTIVATION_FEE_ALLOW_ADMIN_OVERRIDE !== "true") {
     delete body.activation_fee;
   }

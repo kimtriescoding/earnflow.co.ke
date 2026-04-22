@@ -13,6 +13,7 @@ import {
   isValidIsoCalendarDay,
   rangeBoundsUtc,
 } from "@/lib/datetime/zoned-range";
+import { MATCH_METADATA_REAL_FOR_REVENUE } from "@/lib/payments/transaction-real";
 
 const TZ = DASHBOARD_EARNINGS_TIMEZONE;
 
@@ -81,7 +82,13 @@ export async function GET(request) {
       { $group: { _id: "$day", c: { $sum: 1 } } },
     ], aggOpts),
     ActivationPayment.aggregate([
-      { $match: { status: "success", updatedAt: { $gte: start, $lt: endExclusive } } },
+      {
+        $match: {
+          status: "success",
+          updatedAt: { $gte: start, $lt: endExclusive },
+          ...MATCH_METADATA_REAL_FOR_REVENUE,
+        },
+      },
       {
         $project: {
           day: { $dateToString: { format: "%Y-%m-%d", date: "$updatedAt", timezone: TZ } },

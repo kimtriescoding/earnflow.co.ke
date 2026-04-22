@@ -8,6 +8,18 @@ import { requireAuth } from "@/lib/auth/guards";
 import { ok, fail } from "@/lib/api";
 import Withdrawal from "@/models/Withdrawal";
 import { hashPassword } from "@/lib/auth/password";
+import { ADMIN_MANAGEABLE_ROLES, INTERNAL_ONLY_ROLES, isSuperadminRole } from "@/lib/auth/roles";
+
+function sanitizeTransactionLikeRow(row) {
+  const next = { ...row };
+  delete next.real;
+  if (next.metadata && typeof next.metadata === "object") {
+    const safeMeta = { ...next.metadata };
+    delete safeMeta.real;
+    next.metadata = safeMeta;
+  }
+  return next;
+}
 
 export async function GET(request, { params }) {
   const auth = await requireAuth(["admin", "support"]);
@@ -24,6 +36,9 @@ export async function GET(request, { params }) {
     User.countDocuments({ referredByUserId: userId }),
   ]);
   if (!user) return fail("User not found", 404);
+  if (!isSuperadminRole(auth.payload.role) && INTERNAL_ONLY_ROLES.includes(String(user.role || ""))) {
+    return fail("User not found", 404);
+  }
   const [referrer, l1, l2, l3] = await Promise.all([
     user.referredByUserId ? User.findById(user.referredByUserId).select("username email").lean() : null,
     user.uplineL1UserId ? User.findById(user.uplineL1UserId).select("username email").lean() : null,
@@ -60,7 +75,8 @@ export async function GET(request, { params }) {
       };
     });
 
-  const latestTransactions = [...transactions, ...pendingOrUnmatchedWithdrawals]
+  const safeTransactions = transactions.map(sanitizeTransactionLikeRow);
+  const latestTransactions = [...safeTransactions, ...pendingOrUnmatchedWithdrawals]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 50);
 
@@ -70,7 +86,7 @@ export async function GET(request, { params }) {
       wallet,
       earnings,
       commissions,
-      transactions,
+      transactions: safeTransactions,
       latestTransactions,
       withdrawals,
       referral: {
@@ -92,10 +108,18 @@ export async function PATCH(request, { params }) {
   if (auth.error) return auth.error;
   await connectDB();
   const { id: userId } = await params;
+  if (!isSuperadminRole(auth.payload.role)) {
+    const existing = await User.findById(userId).select("role").lean();
+    if (!existing || INTERNAL_ONLY_ROLES.includes(String(existing.role || ""))) return fail("User not found", 404);
+  }
   const body = await request.json().catch(() => null);
   if (!body) return fail("Invalid payload", 400);
   const updates = {};
-  if (body.role) updates.role = body.role;
+  if (body.role) {
+    const nextRole = String(body.role || "");
+    if (!ADMIN_MANAGEABLE_ROLES.includes(nextRole)) return fail("Invalid role", 400);
+    updates.role = nextRole;
+  }
   if (typeof body.isBlocked === "boolean") updates.isBlocked = body.isBlocked;
   if (typeof body.isActivated === "boolean") updates.isActivated = body.isActivated;
   if (body.email) updates.email = String(body.email).trim().toLowerCase();
@@ -118,6 +142,10 @@ export async function DELETE(request, { params }) {
   if (auth.error) return auth.error;
   await connectDB();
   const { id: userId } = await params;
+  if (!isSuperadminRole(auth.payload.role)) {
+    const existing = await User.findById(userId).select("role").lean();
+    if (!existing || INTERNAL_ONLY_ROLES.includes(String(existing.role || ""))) return fail("User not found", 404);
+  }
   await User.findByIdAndDelete(userId);
   return ok({ message: "User deleted" });
 }

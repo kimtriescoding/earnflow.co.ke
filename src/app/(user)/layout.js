@@ -4,6 +4,7 @@ import User from "@/models/User";
 import { readAccessPayloadFromCookies } from "@/lib/auth/jwt";
 import { getSetting } from "@/models/Settings";
 import { UserModuleAccessProvider } from "@/components/user/UserModuleAccessProvider";
+import { ROLE } from "@/lib/auth/roles";
 
 export default async function UserLayout({ children }) {
   const payload = await readAccessPayloadFromCookies();
@@ -13,7 +14,7 @@ export default async function UserLayout({ children }) {
   const user = await User.findById(payload.sub).select("role isActivated isBlocked").lean();
   if (!user) redirect("/login");
   if (user.isBlocked) redirect("/login");
-  if (user.role === "admin") redirect("/admin");
+  if ([ROLE.ADMIN, ROLE.SUPPORT, ROLE.SUPERADMIN].includes(String(user.role || ""))) redirect("/admin");
   if (user.role === "client") redirect("/client");
   if (!user.isActivated) redirect("/activate");
 

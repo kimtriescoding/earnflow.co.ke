@@ -9,6 +9,7 @@ import Wallet from "@/models/Wallet";
 import LuckySpinWallet from "@/models/LuckySpinWallet";
 import AviatorWallet from "@/models/AviatorWallet";
 import { isTransactionAreaEnabled, normalizeModuleAccess } from "@/lib/modules/module-access";
+import { isMetadataRealFlagForRevenue, isTransactionRealForRevenue } from "@/lib/payments/transaction-real";
 
 const FETCH_LIMIT = 300;
 
@@ -59,6 +60,7 @@ function summarizeRows(rows) {
   let grandIn = 0;
   let grandOut = 0;
   for (const r of rows) {
+    if (r.includeInTotals === false) continue;
     const a = Number(r.amount || 0);
     if (!Number.isFinite(a) || a <= 0) continue;
     const area = r.area;
@@ -168,6 +170,7 @@ export async function getUserTransactionFeed(userId, options = {}) {
       kind: String(t.type || "transaction"),
       createdAt: t.createdAt,
       detail: String(t.description || "").trim(),
+      includeInTotals: isTransactionRealForRevenue(t),
     });
   }
 
@@ -199,6 +202,7 @@ export async function getUserTransactionFeed(userId, options = {}) {
       kind: String(L.type),
       createdAt: L.createdAt,
       detail: `Play balance after: ${Number(L.balanceAfter || 0).toFixed(2)} KES`,
+      includeInTotals: isMetadataRealFlagForRevenue(L.metadata),
     });
   }
 
@@ -215,6 +219,7 @@ export async function getUserTransactionFeed(userId, options = {}) {
       kind: String(L.type),
       createdAt: L.createdAt,
       detail: `Play balance after: ${Number(L.balanceAfter || 0).toFixed(2)} KES`,
+      includeInTotals: isMetadataRealFlagForRevenue(L.metadata),
     });
   }
 

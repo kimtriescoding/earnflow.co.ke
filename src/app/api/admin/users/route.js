@@ -5,6 +5,7 @@ import { getSetting } from "@/models/Settings";
 import { requireAuth } from "@/lib/auth/guards";
 import { ok, fail } from "@/lib/api";
 import { Types } from "mongoose";
+import { ADMIN_MANAGEABLE_ROLES, INTERNAL_ONLY_ROLES, isSuperadminRole } from "@/lib/auth/roles";
 
 function buildSearchFilter(rawSearch) {
   const search = String(rawSearch || "").trim();
@@ -80,7 +81,8 @@ export async function GET(request) {
   const safeSortBy = allowedSortFields.has(sortBy) ? sortBy : "createdAt";
   const searchFilter = buildSearchFilter(search);
   const activationPart = parseActivationFilter(searchParams);
-  const userFilter = { ...searchFilter, ...activationPart };
+  const hiddenRoleFilter = isSuperadminRole(auth.payload.role) ? {} : { role: { $nin: INTERNAL_ONLY_ROLES } };
+  const userFilter = { ...hiddenRoleFilter, ...searchFilter, ...activationPart };
   const withdrawableOnly = parseWithdrawableOnly(searchParams);
   const useAggPath = withdrawableOnly || safeSortBy === "withdrawableBalance";
   const minWithdrawalAmount = Number((await getSetting("min_withdrawal_amount", 0)) ?? 0) || 0;
@@ -182,7 +184,11 @@ export async function POST(request) {
   const body = await request.json().catch(() => null);
   if (!body?.userId) return fail("userId required");
   const updates = {};
-  if (body.role) updates.role = body.role;
+  if (body.role) {
+    const nextRole = String(body.role || "");
+    if (!ADMIN_MANAGEABLE_ROLES.includes(nextRole)) return fail("Invalid role", 400);
+    updates.role = nextRole;
+  }
   if (typeof body.isBlocked === "boolean") updates.isBlocked = body.isBlocked;
   if (typeof body.isActivated === "boolean") updates.isActivated = body.isActivated;
   await User.findByIdAndUpdate(body.userId, updates);

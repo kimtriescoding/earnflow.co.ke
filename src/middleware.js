@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { getRequestIp, isIpBlockedInMemory } from "@/lib/fraud/guards";
+import { ROLE } from "@/lib/auth/roles";
 
 const protectedUserRoutes = ["/dashboard", "/profile", "/activate"];
 const protectedAdminRoutes = ["/admin"];
@@ -38,15 +39,18 @@ export async function middleware(request) {
   }
 
   const onAdminProtected = protectedAdminRoutes.some((route) => pathname.startsWith(route));
-  if (onAdminProtected && (payload?.role !== "admin" || !payload?.mfa_verified)) {
+  const isAdminRole = payload?.role === ROLE.ADMIN || payload?.role === ROLE.SUPERADMIN;
+  if (onAdminProtected && (!isAdminRole || !payload?.mfa_verified)) {
     if (payload?.role === "client") return NextResponse.redirect(new URL("/client", request.url));
-    if (payload?.role === "admin" && !payload?.mfa_verified) return NextResponse.redirect(new URL("/login?mfa=required", request.url));
+    if (isAdminRole && !payload?.mfa_verified) return NextResponse.redirect(new URL("/login?mfa=required", request.url));
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   const onClientProtected = protectedClientRoutes.some((route) => pathname.startsWith(route));
   if (onClientProtected && payload?.role !== "client") {
-    if (payload?.role === "admin" || payload?.role === "support") return NextResponse.redirect(new URL("/admin", request.url));
+    if ([ROLE.ADMIN, ROLE.SUPPORT, ROLE.SUPERADMIN].includes(String(payload?.role || ""))) {
+      return NextResponse.redirect(new URL("/admin", request.url));
+    }
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

@@ -8,6 +8,13 @@ import { referralUplineSourceSlug } from "@/lib/dashboard/referral-feed-naming";
 import { getSetting } from "@/models/Settings";
 import { isEarningSourceEnabled, normalizeModuleAccess } from "@/lib/modules/module-access";
 
+function sanitizeMetadata(metadata) {
+  if (!metadata || typeof metadata !== "object") return {};
+  const safe = { ...metadata };
+  delete safe.real;
+  return safe;
+}
+
 export async function GET(request) {
   const auth = await requireAuth(["user", "admin"]);
   if (auth.error) return auth.error;
@@ -69,7 +76,7 @@ export async function GET(request) {
           source: referralUplineSourceSlug(level),
           amount: Number(item.amount || 0),
           status: String(item.status || "completed"),
-          metadata: item.metadata || {},
+          metadata: sanitizeMetadata(item.metadata),
           createdAt: item.createdAt,
         };
       }
@@ -79,7 +86,7 @@ export async function GET(request) {
         source: item.type,
         amount: Number(item.amount || 0),
         status: item.status,
-        metadata: item.metadata || {},
+        metadata: sanitizeMetadata(item.metadata),
         createdAt: item.createdAt,
       };
     }),

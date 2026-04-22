@@ -62,6 +62,7 @@ export const initiateCheckout = async ({
   phoneNumber,
   fetchImpl,
   identifier,
+  real = true,
 }) => {
   const fetcher = fetchImpl || (typeof fetch !== "undefined" ? fetch : null);
   if (!fetcher) throw new Error("No fetch implementation available");
@@ -77,7 +78,7 @@ export const initiateCheckout = async ({
   const initiateRes = await fetcher(DEFAULT_API_BASE_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ authorizationKey, amount, identifier, reference, redirectUrl, currency, phoneNumber }),
+    body: JSON.stringify({ authorizationKey, amount, identifier, reference, redirectUrl, currency, phoneNumber, real }),
   });
   const initiateData = await initiateRes.json().catch(() => ({}));
   if (!initiateRes.ok || !initiateData?.success) {

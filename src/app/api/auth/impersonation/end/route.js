@@ -3,6 +3,7 @@ import User from "@/models/User";
 import { fail, ok } from "@/lib/api";
 import { requireAuth } from "@/lib/auth/guards";
 import { issueAuthSession } from "@/lib/auth/session";
+import { isElevatedRole } from "@/lib/auth/roles";
 
 export async function POST() {
   const auth = await requireAuth(["user", "client", "admin", "support"]);
@@ -15,7 +16,7 @@ export async function POST() {
   const adminUser = await User.findById(adminId).select("_id role username isBlocked").lean();
   if (!adminUser) return fail("Impersonating admin account no longer exists", 404);
   if (adminUser.isBlocked) return fail("Impersonating admin account is blocked", 403);
-  if (!["admin", "support"].includes(adminUser.role)) return fail("Impersonating account has no elevated access", 403);
+  if (!isElevatedRole(adminUser.role)) return fail("Impersonating account has no elevated access", 403);
 
   await issueAuthSession({
     sub: adminUser._id.toString(),

@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import LuckySpinTopup from "@/models/LuckySpinTopup";
 import ActivationPayment from "@/models/ActivationPayment";
+import Transaction from "@/models/Transaction";
 import { creditLuckySpinWallet } from "@/lib/lucky-spin/wallet";
 import { getZetupayCredentials } from "@/models/Settings";
 import { resolveActivationFee } from "@/lib/payments/activation-fee";
 import { isTrustedCallback } from "@/lib/payments/callback-security";
 import { logError, logInfo } from "@/lib/observability/logger";
 import { auditPaymentCallback, handleActivationCallbackPipeline } from "@/lib/payments/activation-callback-core";
+import { isMetadataRealFlagForRevenue } from "@/lib/payments/transaction-real";
 
 export async function POST(request) {
   const t0 = Date.now();
@@ -51,7 +53,7 @@ export async function POST(request) {
             $set: {
               status: "completed",
               processedAt: new Date(),
-              metadata: payment,
+              metadata: { ...payment, real: isMetadataRealFlagForRevenue(topup?.metadata) },
             },
           },
           { new: true }
@@ -61,12 +63,34 @@ export async function POST(request) {
             userId: topup.userId,
             amount: Number(topup.amount || 0),
             type: "topup_checkout",
-            metadata: { topupId: topup._id, paymentKey: topup.paymentKey || "", reference: topup.reference || "" },
+            metadata: {
+              topupId: topup._id,
+              paymentKey: topup.paymentKey || "",
+              reference: topup.reference || "",
+              real: isMetadataRealFlagForRevenue(topup?.metadata),
+            },
           });
+          try {
+            await Transaction.create({
+              userId: topup.userId,
+              type: "lucky_spin_topup_checkout",
+              amount: Number(topup.amount || 0),
+              description: "Lucky Spin top-up via checkout",
+              status: "completed",
+              real: isMetadataRealFlagForRevenue(topup?.metadata),
+              metadata: {
+                topupId: topup._id.toString(),
+                paymentKey: topup.paymentKey || "",
+                reference: topup.reference || "",
+              },
+            });
+          } catch (e) {
+            if (e?.code !== 11000) throw e;
+          }
         }
       } else {
         topup.status = "failed";
-        topup.metadata = payment;
+        topup.metadata = { ...payment, real: isMetadataRealFlagForRevenue(topup?.metadata) };
         await topup.save();
       }
       logInfo("spin.topup_callback_done", { identifier: String(identifier), ms: Date.now() - t0 });

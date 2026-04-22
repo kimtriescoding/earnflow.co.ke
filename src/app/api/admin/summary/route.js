@@ -7,6 +7,7 @@ import ReferralCommission from "@/models/ReferralCommission";
 import { requireAuth } from "@/lib/auth/guards";
 import { ok } from "@/lib/api";
 import { DASHBOARD_EARNINGS_TIMEZONE } from "@/lib/config/dashboard-timezone";
+import { MATCH_METADATA_REAL_FOR_REVENUE } from "@/lib/payments/transaction-real";
 
 const TZ = DASHBOARD_EARNINGS_TIMEZONE;
 
@@ -45,13 +46,13 @@ export async function GET() {
     User.countDocuments({ isActivated: true, isBlocked: false }),
     User.countDocuments({ $or: [{ isActivated: false }, { isBlocked: true }] }),
     ActivationPayment.aggregate([
-      { $match: { status: "success" } },
+      { $match: { status: "success", ...MATCH_METADATA_REAL_FOR_REVENUE } },
       sameCalendarDay("$updatedAt"),
       { $group: { _id: "$userId" } },
       { $count: "n" },
     ]),
     ActivationPayment.aggregate([
-      { $match: { status: "success" } },
+      { $match: { status: "success", ...MATCH_METADATA_REAL_FOR_REVENUE } },
       sameCalendarDay("$updatedAt"),
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]),

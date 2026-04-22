@@ -4,6 +4,7 @@ import ActivationPayment from "@/models/ActivationPayment";
 import LuckySpinTopup from "@/models/LuckySpinTopup";
 import AviatorTopup from "@/models/AviatorTopup";
 import ClientOrder from "@/models/ClientOrder";
+import Transaction from "@/models/Transaction";
 import { creditLuckySpinWallet } from "@/lib/lucky-spin/wallet";
 import { creditAviatorWallet } from "@/lib/aviator/wallet";
 import { getZetupayCredentials } from "@/models/Settings";
@@ -11,6 +12,7 @@ import { resolveActivationFee } from "@/lib/payments/activation-fee";
 import { isTrustedCallback, validateClientOrderPayment } from "@/lib/payments/callback-security";
 import { logError, logInfo } from "@/lib/observability/logger";
 import { auditPaymentCallback, handleActivationCallbackPipeline } from "@/lib/payments/activation-callback-core";
+import { isMetadataRealFlagForRevenue } from "@/lib/payments/transaction-real";
 
 export async function POST(request) {
   const t0 = Date.now();
@@ -102,7 +104,7 @@ export async function POST(request) {
             $set: {
               status: "completed",
               processedAt: new Date(),
-              metadata: payment,
+              metadata: { ...payment, real: isMetadataRealFlagForRevenue(aviatorTopup?.metadata) },
             },
           },
           { new: true }
@@ -112,12 +114,34 @@ export async function POST(request) {
             userId: aviatorTopup.userId,
             amount: Number(aviatorTopup.amount || 0),
             type: "topup_checkout",
-            metadata: { topupId: aviatorTopup._id, paymentKey: aviatorTopup.paymentKey || "", reference: aviatorTopup.reference || "" },
+            metadata: {
+              topupId: aviatorTopup._id,
+              paymentKey: aviatorTopup.paymentKey || "",
+              reference: aviatorTopup.reference || "",
+              real: isMetadataRealFlagForRevenue(aviatorTopup?.metadata),
+            },
           });
+          try {
+            await Transaction.create({
+              userId: aviatorTopup.userId,
+              type: "aviator_topup_checkout",
+              amount: Number(aviatorTopup.amount || 0),
+              description: "Aviator top-up via checkout",
+              status: "completed",
+              real: isMetadataRealFlagForRevenue(aviatorTopup?.metadata),
+              metadata: {
+                topupId: aviatorTopup._id.toString(),
+                paymentKey: aviatorTopup.paymentKey || "",
+                reference: aviatorTopup.reference || "",
+              },
+            });
+          } catch (e) {
+            if (e?.code !== 11000) throw e;
+          }
         }
       } else {
         aviatorTopup.status = "failed";
-        aviatorTopup.metadata = payment;
+        aviatorTopup.metadata = { ...payment, real: isMetadataRealFlagForRevenue(aviatorTopup?.metadata) };
         await aviatorTopup.save();
       }
       return NextResponse.json({ success: true, message: "aviator topup callback processed" }, { status: 200 });
@@ -135,7 +159,7 @@ export async function POST(request) {
             $set: {
               status: "completed",
               processedAt: new Date(),
-              metadata: payment,
+              metadata: { ...payment, real: isMetadataRealFlagForRevenue(topup?.metadata) },
             },
           },
           { new: true }
@@ -145,12 +169,34 @@ export async function POST(request) {
             userId: topup.userId,
             amount: Number(topup.amount || 0),
             type: "topup_checkout",
-            metadata: { topupId: topup._id, paymentKey: topup.paymentKey || "", reference: topup.reference || "" },
+            metadata: {
+              topupId: topup._id,
+              paymentKey: topup.paymentKey || "",
+              reference: topup.reference || "",
+              real: isMetadataRealFlagForRevenue(topup?.metadata),
+            },
           });
+          try {
+            await Transaction.create({
+              userId: topup.userId,
+              type: "lucky_spin_topup_checkout",
+              amount: Number(topup.amount || 0),
+              description: "Lucky Spin top-up via checkout",
+              status: "completed",
+              real: isMetadataRealFlagForRevenue(topup?.metadata),
+              metadata: {
+                topupId: topup._id.toString(),
+                paymentKey: topup.paymentKey || "",
+                reference: topup.reference || "",
+              },
+            });
+          } catch (e) {
+            if (e?.code !== 11000) throw e;
+          }
         }
       } else {
         topup.status = "failed";
-        topup.metadata = payment;
+        topup.metadata = { ...payment, real: isMetadataRealFlagForRevenue(topup?.metadata) };
         await topup.save();
       }
       return NextResponse.json({ success: true, message: "topup callback processed" }, { status: 200 });

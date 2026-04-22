@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
+import { ROLE } from "@/lib/auth/roles";
 
 export default function LoginPageClient() {
   const router = useRouter();
@@ -70,7 +71,7 @@ export default function LoginPageClient() {
       }
 
       toast.success("Login successful.");
-      if (data.role === "admin" || data.role === "support") {
+      if ([ROLE.ADMIN, ROLE.SUPPORT, ROLE.SUPERADMIN].includes(String(data.role || ""))) {
         router.push("/admin");
       } else if (data.role === "client") {
         router.push("/client");

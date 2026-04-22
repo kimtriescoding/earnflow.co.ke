@@ -7,6 +7,7 @@ import { getZetupayCredentials } from "@/models/Settings";
 import { ok, fail, guardBlockedIp } from "@/lib/api";
 import { resolveActivationFee } from "@/lib/payments/activation-fee";
 import { logInfo } from "@/lib/observability/logger";
+import { getPaymentRealSwitches } from "@/lib/payments/reality-switch";
 
 export async function GET() {
   const auth = await requireAuth(["user", "admin"]);
@@ -31,6 +32,8 @@ export async function POST(request) {
   if (amount <= 0) return fail("Activation amount not configured");
   const creds = await getZetupayCredentials(false);
   if (creds?.error) return fail("Zetupay credentials missing", 500);
+  const switches = await getPaymentRealSwitches();
+  const real = switches.activation;
   const draft = await ActivationPayment.create({
     userId: auth.payload.sub,
     amount,
@@ -40,6 +43,7 @@ export async function POST(request) {
     metadata: {
       requestIp: request.headers.get("x-forwarded-for") || "unknown",
       amountSource: activation.source,
+      real,
     },
   });
   let result;
@@ -53,6 +57,7 @@ export async function POST(request) {
       redirectUrl: body.redirectUrl || `${process.env.APP_URL}/dashboard`,
       identifier: draft._id.toString(),
       phoneNumber,
+      real,
     });
   } catch {
     return fail("Checkout provider request failed", 502);

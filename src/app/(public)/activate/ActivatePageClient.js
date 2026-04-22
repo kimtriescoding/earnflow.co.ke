@@ -4,9 +4,10 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, ShieldCheck } from "lucide-react";
+import { ROLE } from "@/lib/auth/roles";
 
 function postActivationPath(role) {
-  if (role === "admin" || role === "support") return "/admin";
+  if ([ROLE.ADMIN, ROLE.SUPPORT, ROLE.SUPERADMIN].includes(String(role || ""))) return "/admin";
   if (role === "client") return "/client";
   return "/dashboard";
 }

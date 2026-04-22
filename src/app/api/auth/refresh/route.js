@@ -5,6 +5,7 @@ import connectDB from "@/lib/db";
 import User from "@/models/User";
 import { rotateRefreshSession } from "@/lib/auth/session";
 import { guardBlockedIp } from "@/lib/api";
+import { isElevatedRole } from "@/lib/auth/roles";
 
 export async function POST(request) {
   const blocked = await guardBlockedIp(request);
@@ -26,10 +27,8 @@ export async function POST(request) {
         role: user.role,
         username: user.username,
         isActivated: Boolean(user.isActivated),
-        mfa_verified: ["admin", "support"].includes(user.role) ? Boolean(payload.mfa_verified && user.mfaEnabled) : true,
-        mfa_setup_verified: ["admin", "support"].includes(user.role)
-          ? Boolean(!user.mfaEnabled && payload.mfa_setup_verified)
-          : false,
+        mfa_verified: isElevatedRole(user.role) ? Boolean(payload.mfa_verified && user.mfaEnabled) : true,
+        mfa_setup_verified: isElevatedRole(user.role) ? Boolean(!user.mfaEnabled && payload.mfa_setup_verified) : false,
       },
       metadata: { source: "refresh" },
     });

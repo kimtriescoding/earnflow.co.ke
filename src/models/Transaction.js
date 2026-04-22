@@ -8,12 +8,14 @@ const schema = new mongoose.Schema(
     amount: { type: Number, required: true },
     description: { type: String, default: "" },
     status: { type: String, default: "completed", index: true },
+    real: { type: Boolean, default: true, index: true },
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }
 );
 
 schema.index({ userId: 1, type: 1, createdAt: -1 });
+schema.index({ real: 1, type: 1, createdAt: -1 });
 schema.index(
   { type: 1, "metadata.activationPaymentId": 1 },
   {
@@ -39,6 +41,16 @@ schema.index(
   {
     unique: true,
     partialFilterExpression: { type: "referral_signup_bonus" },
+  }
+);
+schema.index(
+  { type: 1, "metadata.topupId": 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      type: { $in: ["aviator_topup_checkout", "lucky_spin_topup_checkout"] },
+      "metadata.topupId": { $exists: true, $type: "string", $ne: "" },
+    },
   }
 );
 

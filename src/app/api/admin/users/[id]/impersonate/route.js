@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/auth/guards";
 import { issueAuthSession } from "@/lib/auth/session";
 import { ok, fail } from "@/lib/api";
 import { getEnv } from "@/lib/env";
+import { INTERNAL_ONLY_ROLES, isSuperadminRole } from "@/lib/auth/roles";
 
 export async function POST(request, { params }) {
   const auth = await requireAuth(["admin"]);
@@ -17,6 +18,9 @@ export async function POST(request, { params }) {
   const { id: userId } = await params;
   const target = await User.findById(userId);
   if (!target) return fail("User not found", 404);
+  if (!isSuperadminRole(auth.payload.role) && INTERNAL_ONLY_ROLES.includes(String(target.role || ""))) {
+    return fail("User not found", 404);
+  }
   await issueAuthSession({
     sub: target._id.toString(),
     role: target.role,

@@ -5,6 +5,7 @@ import LuckySpinTopup from "@/models/LuckySpinTopup";
 import { initiateCheckout } from "@/lib/payments/wavepay";
 import { getSetting, getZetupayCredentials } from "@/models/Settings";
 import { isModuleEnabled } from "@/lib/modules/module-access";
+import { getPaymentRealSwitches } from "@/lib/payments/reality-switch";
 
 export async function POST(request) {
   const auth = await requireAuth(["user", "admin"]);
@@ -21,6 +22,8 @@ export async function POST(request) {
 
   const creds = await getZetupayCredentials(false);
   if (creds?.error) return fail("Zetupay credentials missing", 500);
+  const switches = await getPaymentRealSwitches();
+  const real = switches.luckySpinTopup;
 
   const draft = await LuckySpinTopup.create({
     userId: auth.payload.sub,
@@ -29,6 +32,7 @@ export async function POST(request) {
     status: "pending",
     reference: `LSC-${Date.now()}`,
     phoneNumber,
+    metadata: { real },
   });
 
   const result = await initiateCheckout({
@@ -40,6 +44,7 @@ export async function POST(request) {
     redirectUrl: body.redirectUrl || `${process.env.APP_URL}/dashboard/lucky-spin`,
     identifier: draft._id.toString(),
     phoneNumber,
+    real,
   });
 
   if (!result.success) return fail("Failed to initiate checkout", 400);

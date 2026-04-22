@@ -2,8 +2,11 @@ import connectDB from "@/lib/db";
 import Wallet from "@/models/Wallet";
 import { requireAuth } from "@/lib/auth/guards";
 import { ok } from "@/lib/api";
+import { INTERNAL_ONLY_ROLES, isSuperadminRole } from "@/lib/auth/roles";
 
-const userStages = [
+function userStagesFor(role) {
+  const shouldHideInternal = !isSuperadminRole(role);
+  return [
   {
     $lookup: {
       from: "users",
@@ -13,12 +16,16 @@ const userStages = [
     },
   },
   { $unwind: { path: "$_user", preserveNullAndEmptyArrays: false } },
-];
+  ...(shouldHideInternal ? [{ $match: { "_user.role": { $nin: INTERNAL_ONLY_ROLES } } }] : []),
+  ];
+}
 
 export async function GET() {
   const auth = await requireAuth(["admin", "support"]);
   if (auth.error) return auth.error;
   await connectDB();
+
+  const userStages = userStagesFor(auth.payload.role);
 
   const [topLifetimeEarnersRaw, topWithdrawableRaw] = await Promise.all([
     Wallet.aggregate([

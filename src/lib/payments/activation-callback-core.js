@@ -9,6 +9,7 @@ import { blockIpNow } from "@/lib/api";
 import { logError, logInfo } from "@/lib/observability/logger";
 import { ensureOutboxJob } from "@/lib/payments/outbox-enqueue";
 import { processOutboxJobByKey } from "@/lib/payments/outbox-processor";
+import { isMetadataRealFlagForRevenue } from "@/lib/payments/transaction-real";
 
 function hashPayload(payment) {
   try {
@@ -77,7 +78,7 @@ export async function handleActivationCallbackPipeline({
   if (!isSuccess && isFailure) {
     await ActivationPayment.findOneAndUpdate(
       { _id: activation._id, status: "pending" },
-      { $set: { status: "failed", metadata: payment } }
+      { $set: { status: "failed", metadata: { ...payment, real: isMetadataRealFlagForRevenue(activation?.metadata) } } }
     );
     return { json: { success: true, message: "activation failed" }, status: 200 };
   }
@@ -94,7 +95,12 @@ export async function handleActivationCallbackPipeline({
       {
         $set: {
           status: "failed",
-          metadata: { ...payment, fraudReason: "amount_or_reference_mismatch", expectedAmount: effectiveFee.amount },
+          metadata: {
+            ...payment,
+            fraudReason: "amount_or_reference_mismatch",
+            expectedAmount: effectiveFee.amount,
+            real: isMetadataRealFlagForRevenue(activation?.metadata),
+          },
         },
       }
     );
@@ -117,7 +123,7 @@ export async function handleActivationCallbackPipeline({
       amount: check.paidAmount,
       reference: activation.reference,
     },
-    { $set: { status: "success", metadata: payment } },
+    { $set: { status: "success", metadata: { ...payment, real: isMetadataRealFlagForRevenue(activation?.metadata) } } },
     { new: true }
   );
 
@@ -148,6 +154,7 @@ export async function handleActivationCallbackPipeline({
         paidAmount: check.paidAmount,
         activationPaymentId: activation._id,
         reference: activation.reference,
+        real: isMetadataRealFlagForRevenue(activation?.metadata),
       });
       await scheduleReferralOutbox();
       logInfo("activation.callback_idempotent_replay", { identifier, routeTag, ms: Date.now() - t0 });
@@ -162,6 +169,7 @@ export async function handleActivationCallbackPipeline({
     paidAmount: check.paidAmount,
     activationPaymentId: activation._id,
     reference: activation.reference,
+    real: isMetadataRealFlagForRevenue(activation?.metadata),
   });
   await User.findByIdAndUpdate(activation.userId, { $set: { isActivated: true } });
   await scheduleReferralOutbox();
