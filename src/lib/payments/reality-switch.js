@@ -1,4 +1,5 @@
 import { getSetting } from "@/models/Settings";
+import { deleteCache } from "@/lib/cache/config-cache";
 
 export const REALITY_SWITCH_KEYS = {
   activation: "payment_real_activation",
@@ -21,4 +22,11 @@ export async function getPaymentRealSwitches() {
     aviatorTopup: normalizeRealSwitch(aviatorTopup),
     luckySpinTopup: normalizeRealSwitch(luckySpinTopup),
   };
+}
+
+/** Call after updating payment-real settings so `getSetting` reads fresh values (see Settings in-memory cache). */
+export function invalidatePaymentRealSwitchCache() {
+  for (const key of Object.values(REALITY_SWITCH_KEYS)) {
+    deleteCache(`settings:${key}`);
+  }
 }

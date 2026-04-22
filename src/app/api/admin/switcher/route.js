@@ -4,7 +4,7 @@ import Settings from "@/models/Settings";
 import { requireAuth } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/api";
 import { isSuperadminRole } from "@/lib/auth/roles";
-import { REALITY_SWITCH_KEYS, getPaymentRealSwitches } from "@/lib/payments/reality-switch";
+import { REALITY_SWITCH_KEYS, getPaymentRealSwitches, invalidatePaymentRealSwitchCache } from "@/lib/payments/reality-switch";
 
 const FALSE_REAL_TYPES = ["activation_fee", "aviator_topup_checkout", "lucky_spin_topup_checkout"];
 
@@ -68,6 +68,7 @@ export async function POST(request) {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     ),
   ]);
+  invalidatePaymentRealSwitchCache();
 
   return ok({ message: "Switcher updated", data: { switches: next } });
 }

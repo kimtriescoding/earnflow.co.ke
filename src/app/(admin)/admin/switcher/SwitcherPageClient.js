@@ -73,6 +73,7 @@ export default function SwitcherPageClient() {
       toast.error(data.message || "Unable to save switcher.");
       return;
     }
+    if (data.data?.switches) setSwitches(data.data.switches);
     toast.success("Switcher updated.");
     await loadData();
   }
