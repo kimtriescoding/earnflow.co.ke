@@ -5,6 +5,8 @@ import { requireAuth } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/api";
 import { isSuperadminRole } from "@/lib/auth/roles";
 import { REALITY_SWITCH_KEYS, getPaymentRealSwitches, invalidatePaymentRealSwitchCache } from "@/lib/payments/reality-switch";
+import { DASHBOARD_EARNINGS_TIMEZONE } from "@/lib/config/dashboard-timezone";
+import { mongoMatchSameCalendarDayToday } from "@/lib/datetime/mongo-same-day-today";
 
 const FALSE_REAL_TYPES = ["activation_fee", "aviator_topup_checkout", "lucky_spin_topup_checkout"];
 
@@ -23,6 +25,7 @@ export async function GET() {
     getPaymentRealSwitches(),
     Transaction.aggregate([
       { $match: { type: { $in: FALSE_REAL_TYPES }, real: { $eq: false } } },
+      mongoMatchSameCalendarDayToday("$createdAt"),
       { $group: { _id: "$type", count: { $sum: 1 }, totalAmount: { $sum: { $abs: "$amount" } } } },
     ]),
   ]);
@@ -36,7 +39,14 @@ export async function GET() {
     return acc;
   }, {});
 
-  return ok({ data: { switches, tallies } });
+  return ok({
+    data: {
+      switches,
+      tallies,
+      talliesScope: "today",
+      talliesTimeZone: DASHBOARD_EARNINGS_TIMEZONE,
+    },
+  });
 }
 
 export async function POST(request) {

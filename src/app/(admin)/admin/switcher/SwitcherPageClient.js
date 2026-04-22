@@ -43,6 +43,7 @@ export default function SwitcherPageClient() {
   const [tallies, setTallies] = useState({});
   const [saving, setSaving] = useState(false);
   const [tallyUpdatedAt, setTallyUpdatedAt] = useState(null);
+  const [talliesTimeZone, setTalliesTimeZone] = useState("");
   /** True after user changes a toggle but before a successful save — silent polls must not overwrite switches. */
   const dirtyRef = useRef(false);
 
@@ -57,6 +58,7 @@ export default function SwitcherPageClient() {
     }
     const nextSwitches = data.data?.switches || DEFAULT_SWITCHES;
     setTallies(data.data?.tallies || {});
+    if (typeof data.data?.talliesTimeZone === "string") setTalliesTimeZone(data.data.talliesTimeZone);
     setTallyUpdatedAt(new Date());
     if (!silent || !dirtyRef.current) {
       setSwitches(nextSwitches);
@@ -211,17 +213,20 @@ export default function SwitcherPageClient() {
                 <BarChart3 className="h-5 w-5" strokeWidth={2} aria-hidden />
               </div>
               <div className="min-w-0">
-                <h3 className="heading-display text-base font-semibold">Synthetic payment tally</h3>
-                <p className="mt-1 max-w-2xl text-sm leading-relaxed muted-text">
-                  Counts and absolute amounts for transactions where{" "}
-                  <code className="rounded bg-[var(--surface)] px-1.5 py-0.5 text-xs">real</code> is false (activation fee debits, Aviator and
-                  Lucky Spin checkout top-up rows). These still appear in feeds but are excluded from revenue-style sums elsewhere.
-                </p>
+                <h3 className="heading-display text-base font-semibold">Synthetic payment tally (today)</h3>
               </div>
             </div>
             {tallyUpdatedAt && !loading ? (
               <p className="shrink-0 rounded-full border border-[color-mix(in_oklab,var(--border)_50%,transparent)] bg-[var(--surface-soft)] px-3 py-1 text-xs font-medium tabular-nums text-[var(--muted)]">
-                Live · every {POLL_MS / 1000}s
+                Today
+                {talliesTimeZone ? (
+                  <>
+                    <span className="mx-1.5 text-[var(--border)]">·</span>
+                    {talliesTimeZone}
+                  </>
+                ) : null}
+                <span className="mx-1.5 text-[var(--border)]">·</span>
+                Live {POLL_MS / 1000}s
                 <span className="mx-1.5 text-[var(--border)]">·</span>
                 {tallyUpdatedAt.toLocaleTimeString()}
               </p>
@@ -246,7 +251,7 @@ export default function SwitcherPageClient() {
                   >
                     <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">{label}</p>
                     <p className="heading-display mt-2 text-2xl font-semibold tabular-nums">{count}</p>
-                    <p className="mt-0.5 text-xs muted-text">transactions</p>
+                    <p className="mt-0.5 text-xs muted-text">today · count</p>
                     <p className="mt-3 border-t border-[var(--border)] pt-3 text-sm">
                       <span className="text-[var(--muted)]">KES</span>{" "}
                       <span className="font-semibold tabular-nums text-[var(--foreground)]">{total}</span>
