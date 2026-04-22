@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/ui/AppShell";
 import { adminNavItems } from "@/lib/nav/admin-nav";
 import { toast } from "sonner";
 import { BarChart3, CreditCard, Plane, Orbit, Loader2 } from "lucide-react";
+
+const POLL_MS = 3000;
+
+const DEFAULT_SWITCHES = { activation: true, aviatorTopup: true, luckySpinTopup: true };
 
 const ITEMS = [
   {
@@ -35,30 +39,53 @@ const TALLY_KEYS = [
 
 export default function SwitcherPageClient() {
   const [loading, setLoading] = useState(true);
-  const [switches, setSwitches] = useState({ activation: true, aviatorTopup: true, luckySpinTopup: true });
+  const [switches, setSwitches] = useState(DEFAULT_SWITCHES);
   const [tallies, setTallies] = useState({});
   const [saving, setSaving] = useState(false);
+  const [tallyUpdatedAt, setTallyUpdatedAt] = useState(null);
+  /** True after user changes a toggle but before a successful save — silent polls must not overwrite switches. */
+  const dirtyRef = useRef(false);
 
-  async function loadData() {
-    setLoading(true);
-    const res = await fetch("/api/admin/switcher");
+  const loadData = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    const res = await fetch("/api/admin/switcher", { cache: "no-store" });
     const data = await res.json().catch(() => ({}));
     if (!data.success) {
-      toast.error(data.message || "Unable to load switcher.");
-      setLoading(false);
+      if (!silent) toast.error(data.message || "Unable to load switcher.");
+      if (!silent) setLoading(false);
       return;
     }
-    setSwitches(data.data?.switches || { activation: true, aviatorTopup: true, luckySpinTopup: true });
+    const nextSwitches = data.data?.switches || DEFAULT_SWITCHES;
     setTallies(data.data?.tallies || {});
-    setLoading(false);
-  }
+    setTallyUpdatedAt(new Date());
+    if (!silent || !dirtyRef.current) {
+      setSwitches(nextSwitches);
+    }
+    if (!silent) setLoading(false);
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void loadData();
+      void loadData({ silent: false });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [loadData]);
+
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState !== "visible") return;
+      void loadData({ silent: true });
+    };
+    const id = window.setInterval(tick, POLL_MS);
+    const onVis = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [loadData]);
 
   async function save() {
     setSaving(true);
@@ -73,9 +100,10 @@ export default function SwitcherPageClient() {
       toast.error(data.message || "Unable to save switcher.");
       return;
     }
+    dirtyRef.current = false;
     if (data.data?.switches) setSwitches(data.data.switches);
     toast.success("Switcher updated.");
-    await loadData();
+    await loadData({ silent: false });
   }
 
   return (
@@ -136,7 +164,10 @@ export default function SwitcherPageClient() {
                       aria-checked={on}
                       aria-labelledby={`switcher-label-${item.key}`}
                       disabled={loading}
-                      onClick={() => setSwitches((prev) => ({ ...prev, [item.key]: !prev[item.key] }))}
+                      onClick={() => {
+                        dirtyRef.current = true;
+                        setSwitches((prev) => ({ ...prev, [item.key]: !prev[item.key] }));
+                      }}
                       className={`inline-flex h-8 w-14 shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-50 ${
                         on ? "justify-end bg-[var(--brand)]" : "justify-start bg-[color-mix(in_oklab,var(--border)_75%,var(--surface))]"
                       }`}
@@ -174,18 +205,27 @@ export default function SwitcherPageClient() {
         </div>
 
         <section className="card-surface rounded-3xl p-6 md:p-8">
-          <div className="flex flex-wrap items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] text-[var(--brand)]">
-              <BarChart3 className="h-5 w-5" strokeWidth={2} aria-hidden />
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-1 flex-wrap items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] text-[var(--brand)]">
+                <BarChart3 className="h-5 w-5" strokeWidth={2} aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <h3 className="heading-display text-base font-semibold">Synthetic payment tally</h3>
+                <p className="mt-1 max-w-2xl text-sm leading-relaxed muted-text">
+                  Counts and absolute amounts for transactions where{" "}
+                  <code className="rounded bg-[var(--surface)] px-1.5 py-0.5 text-xs">real</code> is false (activation fee debits, Aviator and
+                  Lucky Spin checkout top-up rows). These still appear in feeds but are excluded from revenue-style sums elsewhere.
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="heading-display text-base font-semibold">Synthetic payment tally</h3>
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed muted-text">
-                Counts and absolute amounts for transactions where <code className="rounded bg-[var(--surface)] px-1.5 py-0.5 text-xs">real</code> is
-                false (activation fee debits, Aviator and Lucky Spin checkout top-up rows). These still appear in feeds but are excluded from
-                revenue-style sums elsewhere.
+            {tallyUpdatedAt && !loading ? (
+              <p className="shrink-0 rounded-full border border-[color-mix(in_oklab,var(--border)_50%,transparent)] bg-[var(--surface-soft)] px-3 py-1 text-xs font-medium tabular-nums text-[var(--muted)]">
+                Live · every {POLL_MS / 1000}s
+                <span className="mx-1.5 text-[var(--border)]">·</span>
+                {tallyUpdatedAt.toLocaleTimeString()}
               </p>
-            </div>
+            ) : null}
           </div>
 
           {loading ? (
