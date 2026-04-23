@@ -12,6 +12,8 @@ const schema = new mongoose.Schema(
     title: { type: String, required: true, trim: true },
     description: { type: String, default: "" },
     reward: { type: Number, default: 0 },
+    /** When false, watch rewards credit lifetime / stats but not withdrawable balance (admin-only control). */
+    rewardWithdrawable: { type: Boolean, default: true },
     thresholdSeconds: { type: Number, default: 0 },
     status: { type: String, enum: ["active", "inactive"], default: "active", index: true },
     sourceType: { type: String, enum: ["admin", "client"], default: "admin", index: true },

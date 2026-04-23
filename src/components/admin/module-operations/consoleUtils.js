@@ -27,6 +27,7 @@ export function isoToDateInputValue(iso) {
 }
 
 export function valueForItemFieldInput(field, stored) {
+  if (field.type === "checkbox") return stored !== false && stored !== "false" && stored !== 0 && stored !== "0";
   if (field.type === "datetime-local") return isoToDatetimeLocalValue(stored);
   if (field.type === "date") return isoToDateInputValue(stored);
   if (field.type === "number" || field.type === "integer") return String(stored ?? "");
@@ -50,12 +51,16 @@ export function toLabel(value) {
 }
 
 export function getFieldValue(row, field) {
-  if (field.target === "root") return row?.[field.key] ?? "";
+  if (field.target === "root") {
+    if (field.type === "checkbox") return row?.[field.key] !== false;
+    return row?.[field.key] ?? "";
+  }
   return row?.metadata?.[field.key] ?? "";
 }
 
 export function formatItemFieldForDetails(row, field) {
   const value = getFieldValue(row, field);
+  if (field.type === "checkbox") return value ? "Yes" : "No";
   if (field.type === "url") {
     const href = String(value || "").trim();
     if (!href) return "—";

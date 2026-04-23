@@ -3,7 +3,7 @@ import { requireAuth } from "@/lib/auth/guards";
 import connectDB from "@/lib/db";
 import ModuleItem from "@/models/ModuleItem";
 import { getSetting } from "@/models/Settings";
-import { submitEarningEvent } from "@/lib/ledger/earnings";
+import { submitEarningEvent, toPublicEarningEventJSON } from "@/lib/ledger/earnings";
 import { logModuleInteraction } from "@/lib/modules/interactions";
 import { ok, fail } from "@/lib/api";
 import { isWithinWindow, maxParticipantsCap } from "@/lib/modules/academic";
@@ -67,6 +67,7 @@ export async function POST(request) {
   if (!Number.isFinite(reward) || reward <= 0) return fail("Invalid video reward", 400);
 
   const canonicalVideoId = item._id.toString();
+  const rewardWithdrawable = item.rewardWithdrawable !== false;
 
   const event = await submitEarningEvent({
     userId: auth.payload.sub,
@@ -80,6 +81,7 @@ export async function POST(request) {
       itemId: canonicalVideoId,
     },
     status: "pending",
+    withdrawableCredit: rewardWithdrawable,
   });
   await logModuleInteraction({
     module: "video",
@@ -91,5 +93,7 @@ export async function POST(request) {
     earningEventId: event._id,
     metadata: { watchedSeconds, threshold, videoId: canonicalVideoId },
   });
-  return ok({ data: event }, 201);
+  const raw = event?.toObject?.({ flattenMaps: true }) ?? event;
+  const safePayload = auth.payload.role === "user" ? toPublicEarningEventJSON(raw) : raw;
+  return ok({ data: safePayload }, 201);
 }

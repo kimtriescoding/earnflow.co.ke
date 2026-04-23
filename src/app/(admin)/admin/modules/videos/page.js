@@ -45,6 +45,15 @@ const videoItemFields = [
     target: "root",
     placeholder: "Optional goal number of completed views (0 = not set)",
   },
+  {
+    key: "rewardWithdrawable",
+    label: "Reward is withdrawable",
+    columnHeader: "Withdraw",
+    type: "checkbox",
+    target: "root",
+    defaultChecked: true,
+    help: "If unchecked, approved rewards count toward video stats and lifetime earnings but do not increase the balance users can cash out.",
+  },
 ];
 
 export default function AdminVideosModulePage() {

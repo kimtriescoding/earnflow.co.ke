@@ -13,12 +13,21 @@ async function persistApprovedEarning(event, user, actorId, session) {
   event.approvedBy = actorId;
   event.approvedAt = new Date();
   await event.save(opts);
-  await Wallet.findOneAndUpdate(
-    { userId: user._id },
-    { $inc: { pendingBalance: -event.amount, availableBalance: event.amount, lifetimeEarnings: event.amount } },
-    { ...opts, upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-  await User.findByIdAndUpdate(user._id, { $inc: { balance: event.amount } }, opts);
+  const withdrawable = event.withdrawableCredit !== false;
+  if (withdrawable) {
+    await Wallet.findOneAndUpdate(
+      { userId: user._id },
+      { $inc: { pendingBalance: -event.amount, availableBalance: event.amount, lifetimeEarnings: event.amount } },
+      { ...opts, upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    await User.findByIdAndUpdate(user._id, { $inc: { balance: event.amount } }, opts);
+  } else {
+    await Wallet.findOneAndUpdate(
+      { userId: user._id },
+      { $inc: { pendingBalance: -event.amount, heldMainBalance: event.amount, lifetimeEarnings: event.amount } },
+      { ...opts, upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+  }
 }
 
 export async function getCommissionRules() {
@@ -26,9 +35,18 @@ export async function getCommissionRules() {
   return loadReferralCommissionRules();
 }
 
-export async function submitEarningEvent({ userId, amount, source, metadata = {}, status = "pending" }) {
+export async function submitEarningEvent({ userId, amount, source, metadata = {}, status = "pending", withdrawableCredit = true }) {
   await connectDB();
-  return EarningEvent.create({ userId, amount, source, metadata, status });
+  return EarningEvent.create({ userId, amount, source, metadata, status, withdrawableCredit: withdrawableCredit !== false });
+}
+
+/** Removes internal ledger flags from API payloads shown to end users. */
+export function toPublicEarningEventJSON(doc) {
+  if (!doc) return doc;
+  const plain = typeof doc.toObject === "function" ? doc.toObject({ flattenMaps: true }) : { ...doc };
+  const rest = { ...plain };
+  delete rest.withdrawableCredit;
+  return rest;
 }
 
 export async function approveEarningEvent({ eventId, actorId }) {

@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import { requireAuth } from "@/lib/auth/guards";
 import connectDB from "@/lib/db";
 import { getSetting } from "@/models/Settings";
-import { submitEarningEvent } from "@/lib/ledger/earnings";
+import { submitEarningEvent, toPublicEarningEventJSON } from "@/lib/ledger/earnings";
 import { logModuleInteraction } from "@/lib/modules/interactions";
 import { ok, fail } from "@/lib/api";
 import {
@@ -166,5 +166,7 @@ export async function POST(request) {
     },
   });
 
-  return ok({ data: event }, 201);
+  const raw = event?.toObject?.({ flattenMaps: true }) ?? event;
+  const data = auth.payload.role === "user" ? toPublicEarningEventJSON(raw) : raw;
+  return ok({ data }, 201);
 }

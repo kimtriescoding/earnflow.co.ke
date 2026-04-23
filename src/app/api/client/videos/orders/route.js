@@ -72,6 +72,7 @@ export async function POST(request) {
     title,
     description: String(body.description || "").trim(),
     reward: clientReward,
+    rewardWithdrawable: true,
     thresholdSeconds: Number(defaults.thresholdSeconds || 30),
     status: "inactive",
     sourceType: "client",

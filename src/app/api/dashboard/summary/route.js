@@ -17,6 +17,7 @@ import {
   stripDisabledModuleStats,
 } from "@/lib/modules/module-access";
 import { MATCH_TRANSACTION_REAL_FOR_REVENUE } from "@/lib/payments/transaction-real";
+import { toPublicEarningEventJSON } from "@/lib/ledger/earnings";
 
 export async function GET() {
   const auth = await requireAuth(["user", "admin"]);
@@ -121,10 +122,20 @@ export async function GET() {
   const moduleTotals = stripDisabledModuleStats(moduleAccess, approvedBySource);
   const pendingCounts = stripDisabledModuleStats(moduleAccess, pendingBySource);
 
+  const isEndUser = auth.payload.role === "user";
+  const walletForClient = isEndUser
+    ? {
+        availableBalance: Number(wallet?.availableBalance || 0),
+        pendingBalance: Number(wallet?.pendingBalance || 0),
+        lifetimeEarnings: Number(wallet?.lifetimeEarnings || 0),
+      }
+    : wallet;
+  const eventsForClient = isEndUser ? events.map((e) => toPublicEarningEventJSON(e)) : events;
+
   return ok({
     data: {
-      wallet,
-      events,
+      wallet: walletForClient,
+      events: eventsForClient,
       commissions,
       referrals,
       referralCode: user?.referralCode || "",

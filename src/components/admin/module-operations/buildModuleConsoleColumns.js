@@ -56,6 +56,9 @@ export function buildItemColumns(deps) {
             </a>
           );
         }
+        if (field.type === "checkbox") {
+          return value ? "Yes" : "No";
+        }
         if (field.type === "number" || field.type === "integer") {
           return field.integer || field.type === "integer"
             ? String(Math.floor(Number(value || 0)))

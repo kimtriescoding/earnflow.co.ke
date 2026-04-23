@@ -1,7 +1,7 @@
 "use client";
 
 import { StatusChip } from "@/components/ui/StatusChip";
-import { getFieldValue, valueForItemFieldInput, formatItemFieldForDetails } from "./consoleUtils";
+import { formatItemFieldForDetails } from "./consoleUtils";
 
 export function ModuleItemViewModal({
   viewItemRow,

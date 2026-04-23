@@ -1,5 +1,5 @@
 import { requireAuth } from "@/lib/auth/guards";
-import { submitEarningEvent } from "@/lib/ledger/earnings";
+import { submitEarningEvent, toPublicEarningEventJSON } from "@/lib/ledger/earnings";
 import { ok, fail, guardRateLimit } from "@/lib/api";
 
 export async function POST(request) {
@@ -20,5 +20,7 @@ export async function POST(request) {
     metadata: body.metadata || {},
     status: body.status || "pending",
   });
-  return ok({ data: event }, 201);
+  const raw = event?.toObject?.({ flattenMaps: true }) ?? event;
+  const data = auth.payload.role === "user" ? toPublicEarningEventJSON(raw) : raw;
+  return ok({ data }, 201);
 }

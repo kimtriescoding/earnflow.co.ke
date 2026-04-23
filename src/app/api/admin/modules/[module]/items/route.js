@@ -43,6 +43,7 @@ export async function POST(request, { params }) {
     title,
     description: String(body.description || "").trim(),
     reward: Number(body.reward || 0),
+    rewardWithdrawable: body.rewardWithdrawable === false ? false : true,
     thresholdSeconds: Number(body.thresholdSeconds || 0),
     status: body.status === "inactive" ? "inactive" : "active",
     sourceType: "admin",

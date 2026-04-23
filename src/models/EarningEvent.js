@@ -11,6 +11,8 @@ const schema = new mongoose.Schema(
       index: true,
     },
     amount: { type: Number, required: true },
+    /** When false, approval credits held main wallet only (not withdrawable); omit from user-facing APIs. */
+    withdrawableCredit: { type: Boolean, default: true },
     status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending", index: true },
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },

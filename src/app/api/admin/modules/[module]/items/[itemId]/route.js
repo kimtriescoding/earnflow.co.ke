@@ -18,6 +18,7 @@ export async function PATCH(request, { params }) {
   if (body.title !== undefined) updates.title = String(body.title || "").trim();
   if (body.description !== undefined) updates.description = String(body.description || "").trim();
   if (body.reward !== undefined) updates.reward = Number(body.reward || 0);
+  if (body.rewardWithdrawable !== undefined) updates.rewardWithdrawable = Boolean(body.rewardWithdrawable);
   if (body.thresholdSeconds !== undefined) updates.thresholdSeconds = Number(body.thresholdSeconds || 0);
   if (body.status !== undefined) updates.status = body.status === "inactive" ? "inactive" : "active";
   if (body.approvalStatus !== undefined) updates.approvalStatus = body.approvalStatus === "rejected" ? "rejected" : body.approvalStatus === "pending" ? "pending" : "approved";

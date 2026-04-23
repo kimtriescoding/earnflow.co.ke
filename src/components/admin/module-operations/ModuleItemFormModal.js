@@ -79,6 +79,22 @@ export function ModuleItemFormModal({
           </select>
           {itemFields.map((field) => {
             const ph = field.placeholder || field.label;
+            if (field.type === "checkbox") {
+              return (
+                <label key={field.key} className="flex items-start gap-2 text-sm md:col-span-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={Boolean(itemForm[field.key])}
+                    onChange={(e) => setItemForm((prev) => ({ ...prev, [field.key]: e.target.checked }))}
+                  />
+                  <span>
+                    <span className="font-medium text-[var(--foreground)]">{field.label}</span>
+                    {field.help ? <span className="mt-0.5 block text-xs muted-text">{field.help}</span> : null}
+                  </span>
+                </label>
+              );
+            }
             const val = itemForm[field.key] || "";
             if (field.type === "textarea") {
               return (

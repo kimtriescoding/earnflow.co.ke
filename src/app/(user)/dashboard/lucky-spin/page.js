@@ -155,7 +155,7 @@ export default function LuckySpinPage() {
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <section className="card-surface rounded-3xl p-6">
+        <section className="order-2 card-surface rounded-3xl p-6 xl:order-1">
           <h2 className="heading-display text-lg font-semibold">Bet and spin</h2>
           <p className="mt-1 text-sm muted-text">Bets use Lucky Spin balance only. Min bet: KES {Number(minBetAmount).toFixed(2)}.</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -191,7 +191,7 @@ export default function LuckySpinPage() {
             </button>
           </div>
         </section>
-        <aside className="card-strong relative overflow-hidden rounded-3xl p-6">
+        <aside className="order-1 card-strong relative overflow-hidden rounded-3xl p-6 xl:order-2">
           <div
             className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.14)_0%,transparent_70%)]"
             aria-hidden
@@ -201,10 +201,29 @@ export default function LuckySpinPage() {
             aria-hidden
           />
           <h3 className="heading-display relative text-base font-semibold">Lucky wheel</h3>
-          <p className="relative mt-1 text-xs uppercase tracking-[0.12em] muted-text">Multipliers on every wedge</p>
+          <p className="relative mt-1 text-xs font-medium uppercase tracking-[0.12em] text-white/90">
+            Pointer at the top shows where you land — tap the wheel or use Spin.
+          </p>
           <div className="relative mt-6 flex flex-col items-center pb-2">
-            <LuckySpinWheel segmentCount={segmentCount} wheelRotation={wheelRotation} loading={loading} />
-            <p className="mt-6 text-sm muted-text">{loading ? "Wheel is spinning…" : "Tap Spin now to play."}</p>
+            <LuckySpinWheel
+              segmentCount={segmentCount}
+              wheelRotation={wheelRotation}
+              loading={loading}
+              onActivate={spinNow}
+            />
+            <button
+              type="button"
+              onClick={spinNow}
+              disabled={loading}
+              className="primary-btn mt-5 min-h-[48px] w-full max-w-[min(300px,calc(100vw-2rem))] px-4 py-3 text-base font-semibold shadow-lg disabled:opacity-60 sm:py-3.5"
+            >
+              {loading ? "Spinning…" : `Spin for KES ${Number(betAmount || minBetAmount).toFixed(2)}`}
+            </button>
+            <p className="mt-3 max-w-[min(300px,calc(100vw-2rem))] text-center text-sm text-white/80">
+              {loading
+                ? "Wheel is spinning…"
+                : "You can also tap the wheel. Change the bet amount in the Bet and spin panel."}
+            </p>
             {landedLabel ? (
               <p className="mt-1 text-sm font-semibold text-[var(--brand)]">
                 Landed on: {landedLabel} (KES {Number(result?.outcome?.reward || 0).toFixed(2)})

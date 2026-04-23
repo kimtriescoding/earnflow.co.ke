@@ -33,7 +33,12 @@ export function useModuleOperationsConsole({
       reward: String(defaultItemReward),
       thresholdSeconds: "",
       status: "active",
-      ...Object.fromEntries(itemFields.map((field) => [field.key, ""])),
+      ...Object.fromEntries(
+        itemFields.map((field) => [
+          field.key,
+          field.type === "checkbox" ? Boolean(field.defaultChecked !== false) : "",
+        ])
+      ),
     }),
     [defaultItemReward, itemFields]
   );
@@ -113,7 +118,9 @@ export function useModuleOperationsConsole({
       for (const field of itemFields) {
         const raw = itemForm[field.key];
         if (field.target === "root") {
-          if (field.type === "number" || field.type === "integer") {
+          if (field.type === "checkbox") {
+            dynamicRootUpdates[field.key] = Boolean(itemForm[field.key]);
+          } else if (field.type === "number" || field.type === "integer") {
             const n = Number(raw || 0);
             const useInt = field.integer || field.type === "integer";
             dynamicRootUpdates[field.key] = useInt ? Math.max(0, Math.floor(n)) : n;
