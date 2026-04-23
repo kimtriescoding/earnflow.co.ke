@@ -45,4 +45,21 @@ export async function userHasBlockingVideoWatch(userId, itemId) {
   return Boolean(row);
 }
 
+/** Item ids (as strings) where this user already has a pending or approved watch (no duplicate reward). */
+export async function blockingVideoWatchItemIdsForUser(userId, itemIds) {
+  if (!itemIds?.length) return new Set();
+  const ids = itemIds.filter((id) => id != null);
+  if (!ids.length) return new Set();
+  const rows = await ModuleInteraction.find({
+    module: "video",
+    action: "watch",
+    userId,
+    itemId: { $in: ids },
+    status: { $in: BLOCKING_SUBMISSION_STATUSES },
+  })
+    .select("itemId")
+    .lean();
+  return new Set(rows.map((r) => String(r.itemId)));
+}
+
 export { filterItemsByTimeWindow, maxParticipantsCap, slotsRemainingForItem };

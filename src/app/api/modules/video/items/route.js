@@ -5,11 +5,11 @@ import ModuleItem from "@/models/ModuleItem";
 import { ok, fail } from "@/lib/api";
 import {
   adminVideoItemBaseFilter,
+  blockingVideoWatchItemIdsForUser,
   countDistinctVideoWatchEarners,
   filterItemsByTimeWindow,
   maxParticipantsCap,
   slotsRemainingForItem,
-  userHasBlockingVideoWatch,
 } from "@/lib/modules/video";
 
 export async function GET() {
@@ -25,11 +25,11 @@ export async function GET() {
   const now = new Date();
   const open = filterItemsByTimeWindow(rows, now);
 
-  const data = [];
   const isEndUser = auth.payload.role === "user";
-  for (const item of open) {
-    if (isEndUser && (await userHasBlockingVideoWatch(auth.payload.sub, item._id))) continue;
+  const blockingItemIds = isEndUser ? await blockingVideoWatchItemIdsForUser(auth.payload.sub, open.map((i) => i._id)) : new Set();
 
+  const data = [];
+  for (const item of open) {
     const filled = await countDistinctVideoWatchEarners(item._id);
     const slotsRemaining = slotsRemainingForItem(item, filled);
     const cap = maxParticipantsCap(item.metadata || {});
@@ -41,6 +41,8 @@ export async function GET() {
     const rew = Number(item.reward || 0);
     if (!videoUrl || th <= 0 || !Number.isFinite(rew) || rew <= 0) continue;
 
+    const alreadySubmitted = isEndUser && blockingItemIds.has(String(item._id));
+
     data.push({
       _id: item._id.toString(),
       title: item.title,
@@ -48,6 +50,7 @@ export async function GET() {
       reward: Number(item.reward || 0),
       thresholdSeconds: th,
       createdAt: item.createdAt,
+      alreadySubmitted,
       metadata: {
         videoUrl,
         startsAt: m.startsAt || null,

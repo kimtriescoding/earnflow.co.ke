@@ -100,8 +100,12 @@ export default function VideosPage() {
     fetch("/api/modules/video/items")
       .then((res) => res.json())
       .then((data) => {
-        if (data.success) setVideos(data.data || []);
-        else toast.error(data.message || "Could not load videos.");
+        if (data.success) {
+          const list = [...(data.data || [])].sort(
+            (a, b) => Number(Boolean(a.alreadySubmitted)) - Number(Boolean(b.alreadySubmitted))
+          );
+          setVideos(list);
+        } else toast.error(data.message || "Could not load videos.");
       })
       .catch(() => toast.error("Could not load videos."));
   }, []);
@@ -126,16 +130,17 @@ export default function VideosPage() {
   }, [watchItem?._id]);
 
   useEffect(() => {
-    if (!watchItem) return undefined;
+    if (!watchItem?._id) return undefined;
+    if (watchItem.alreadySubmitted) return undefined;
     const tick = window.setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => window.clearInterval(tick);
-  }, [watchItem]);
+  }, [watchItem?._id, watchItem?.alreadySubmitted]);
 
   const threshold = watchItem ? Math.max(1, Number(watchItem.thresholdSeconds || 0)) : 0;
   const thresholdMet = Boolean(watchItem && elapsed >= threshold);
 
   const submitWatch = useCallback(async () => {
-    if (!watchItem) return;
+    if (!watchItem || watchItem.alreadySubmitted) return;
     const th = Math.max(1, Number(watchItem.thresholdSeconds || 0));
     if (elapsed < th) return;
     setClaiming(true);
@@ -166,7 +171,7 @@ export default function VideosPage() {
   }, [watchItem, elapsed, loadVideos, loadActivity]);
 
   useEffect(() => {
-    if (!watchItem || !thresholdMet || autoSubmitStartedRef.current || claiming) return;
+    if (!watchItem || watchItem.alreadySubmitted || !thresholdMet || autoSubmitStartedRef.current || claiming) return;
     autoSubmitStartedRef.current = true;
     void submitWatch();
   }, [watchItem, thresholdMet, claiming, submitWatch]);
@@ -203,14 +208,17 @@ export default function VideosPage() {
   const embedSrc = url ? getVideoEmbedSrc(url) : null;
   const embedSrcAutoplay = embedSrc ? withEmbedAutoplay(embedSrc) : null;
   const mp4 = url && isLikelyMp4Url(url);
+  const replayOnly = Boolean(watchItem?.alreadySubmitted);
 
   return (
     <UserAppShell title="Watch & Earn">
       <div className="card-surface rounded-3xl section-card">
         <h2 className="heading-display text-lg font-semibold">Video earning</h2>
         <p className="mt-1 text-sm muted-text">
-          Open a video and keep this page open. When you reach the required watch time, your watch is submitted automatically. Each video can
-          only be counted once while pending or approved.
+          Open a video and keep this page open. When you reach the required watch time, your watch is submitted automatically. Each video is
+          only counted once for a reward while your submission is pending or approved. Videos you already submitted stay in the list so you
+          can replay them—they show as <span className="font-medium text-[var(--foreground)]">Already counted</span> and do not send
+          another reward.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <button
@@ -240,7 +248,10 @@ export default function VideosPage() {
             <ul className="grid gap-3 md:grid-cols-2">
               {videos.map((v) => (
                 <li key={v._id} className="card-surface flex flex-col rounded-3xl p-5">
-                  <h3 className="heading-display text-base font-semibold">{v.title}</h3>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <h3 className="heading-display text-base font-semibold">{v.title}</h3>
+                    {v.alreadySubmitted ? <StatusChip status="approved" label="Already counted" /> : null}
+                  </div>
                   {v.description ? <p className="mt-2 line-clamp-2 text-sm muted-text">{v.description}</p> : null}
                   <dl className="mt-3 grid gap-1 text-xs text-slate-600 dark:text-slate-400">
                     <div className="flex justify-between gap-2">
@@ -258,11 +269,11 @@ export default function VideosPage() {
                   </dl>
                   <button
                     type="button"
-                    className="primary-btn mt-4 w-full px-4 py-2 text-sm"
+                    className={`mt-4 w-full px-4 py-2 text-sm ${v.alreadySubmitted ? "secondary-btn" : "primary-btn"}`}
                     disabled={!v.metadata?.videoUrl}
                     onClick={() => setWatchItem(v)}
                   >
-                    {v.metadata?.videoUrl ? "Watch & earn" : "Video link missing"}
+                    {!v.metadata?.videoUrl ? "Video link missing" : v.alreadySubmitted ? "Watch again" : "Watch & earn"}
                   </button>
                 </li>
               ))}
@@ -291,17 +302,26 @@ export default function VideosPage() {
           <div className="card-surface flex max-h-[min(92vh,800px)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl">
             <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] p-4 sm:p-5">
               <div>
-                <h4 className="heading-display text-base font-semibold">{watchItem.title}</h4>
-                <p className="mt-1 text-sm muted-text">
-                  Timer: <span className="font-mono tabular-nums text-[var(--foreground)]">{elapsed}s</span>
-                  {" · "}
-                  Need <span className="font-mono tabular-nums">{threshold}s</span>
-                  {!thresholdMet ? (
-                    <span className="text-[var(--muted)]"> — keep this page open while watching</span>
-                  ) : (
-                    <span className="text-[var(--muted)]"> — submitting your watch…</span>
-                  )}
-                </p>
+                <div className="flex flex-wrap items-start gap-2">
+                  <h4 className="heading-display text-base font-semibold">{watchItem.title}</h4>
+                  {replayOnly ? <StatusChip status="approved" label="Already counted" /> : null}
+                </div>
+                {replayOnly ? (
+                  <p className="mt-1 text-sm muted-text">
+                    You already have a submission for this video. You can replay it here; no new reward will be added.
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm muted-text">
+                    Timer: <span className="font-mono tabular-nums text-[var(--foreground)]">{elapsed}s</span>
+                    {" · "}
+                    Need <span className="font-mono tabular-nums">{threshold}s</span>
+                    {!thresholdMet ? (
+                      <span className="text-[var(--muted)]"> — keep this page open while watching</span>
+                    ) : (
+                      <span className="text-[var(--muted)]"> — submitting your watch…</span>
+                    )}
+                  </p>
+                )}
               </div>
               <button type="button" className="secondary-btn shrink-0 px-3 py-1.5 text-xs" onClick={() => setWatchItem(null)}>
                 Close
@@ -361,9 +381,11 @@ export default function VideosPage() {
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] p-4 sm:p-5">
               <p className="text-sm text-[var(--muted)]">
-                {!thresholdMet
-                  ? `${Math.max(0, threshold - elapsed)}s left — your watch is sent automatically at ${threshold}s.`
-                  : "Hang on — confirming your watch…"}
+                {replayOnly
+                  ? "Replay only — your watch is already on record."
+                  : !thresholdMet
+                    ? `${Math.max(0, threshold - elapsed)}s left — your watch is sent automatically at ${threshold}s.`
+                    : "Hang on — confirming your watch…"}
               </p>
               <button type="button" className="secondary-btn px-4 py-2 text-sm" disabled={claiming} onClick={() => setWatchItem(null)}>
                 Close
