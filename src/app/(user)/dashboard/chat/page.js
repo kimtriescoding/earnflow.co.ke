@@ -2,7 +2,7 @@
 
 import { UserAppShell } from "@/components/user/UserAppShell";
 
-const CHAT_IFRAME_SRC = "https://orionchathub.com/register?as=host";
+const CHAT_IFRAME_SRC = "https://www.rentacyberfriend.com";
 
 export default function ChatPage() {
   return (
