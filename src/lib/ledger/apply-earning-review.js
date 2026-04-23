@@ -19,10 +19,27 @@ export async function applyEarningReview({ eventId, action, actorId }) {
 
   if (action === "approve") {
     const r = await approveEarningEvent({ eventId, actorId });
-    if (!r.success) return { ok: false, message: "Could not approve this reward" };
+    if (!r.success) {
+      return {
+        ok: false,
+        message:
+          r.reason === "not_found_or_done"
+            ? "This reward is no longer pending (it may have been approved already)."
+            : r.reason === "user_not_found"
+              ? "User for this reward no longer exists."
+              : "Could not approve this reward",
+        reason: r.reason,
+      };
+    }
   } else if (action === "reject") {
     const r = await rejectEarningEvent({ eventId, actorId });
-    if (!r.success) return { ok: false, message: "Could not reject this reward" };
+    if (!r.success) {
+      return {
+        ok: false,
+        message: r.reason === "not_pending" ? "This reward is no longer pending review." : "Could not reject this reward",
+        reason: r.reason,
+      };
+    }
   } else {
     return { ok: false, message: "action must be approve or reject" };
   }

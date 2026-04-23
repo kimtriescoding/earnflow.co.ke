@@ -79,11 +79,8 @@ export async function approveEarningEvent({ eventId, actorId }) {
     {
       $set: {
         status: "approved",
-        metadata: {
-          ...(event.metadata || {}),
-          reviewedBy: actorId,
-          reviewedAt: new Date().toISOString(),
-        },
+        ...(actorId != null ? { "metadata.reviewedBy": actorId } : {}),
+        "metadata.reviewedAt": new Date().toISOString(),
       },
     }
   );
@@ -105,10 +102,8 @@ export async function rejectEarningEvent({ eventId, actorId }) {
     {
       $set: {
         status: "rejected",
-        metadata: {
-          reviewedBy: actorId,
-          reviewedAt: new Date().toISOString(),
-        },
+        ...(actorId != null ? { "metadata.reviewedBy": actorId } : {}),
+        "metadata.reviewedAt": new Date().toISOString(),
       },
     }
   );

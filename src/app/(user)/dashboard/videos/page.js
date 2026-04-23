@@ -155,7 +155,11 @@ export default function VideosPage() {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success("Watch recorded. Reward is pending review.");
+        if (data.data?.status === "approved") {
+          toast.success("Watch recorded. Your reward is confirmed.");
+        } else {
+          toast.success("Watch recorded. Reward is pending review.");
+        }
         setWatchItem(null);
         loadVideos();
         loadActivity();

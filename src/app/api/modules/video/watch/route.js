@@ -3,7 +3,8 @@ import { requireAuth } from "@/lib/auth/guards";
 import connectDB from "@/lib/db";
 import ModuleItem from "@/models/ModuleItem";
 import { getSetting } from "@/models/Settings";
-import { submitEarningEvent, toPublicEarningEventJSON } from "@/lib/ledger/earnings";
+import EarningEvent from "@/models/EarningEvent";
+import { approveEarningEvent, submitEarningEvent, toPublicEarningEventJSON } from "@/lib/ledger/earnings";
 import { logModuleInteraction } from "@/lib/modules/interactions";
 import { ok, fail } from "@/lib/api";
 import { isWithinWindow, maxParticipantsCap } from "@/lib/modules/academic";
@@ -93,7 +94,16 @@ export async function POST(request) {
     earningEventId: event._id,
     metadata: { watchedSeconds, threshold, videoId: canonicalVideoId },
   });
-  const raw = event?.toObject?.({ flattenMaps: true }) ?? event;
+
+  if (!rewardWithdrawable) {
+    const approved = await approveEarningEvent({ eventId: event._id, actorId: null });
+    if (!approved.success) {
+      return fail("Watch was saved but automatic confirmation failed. Please try again or contact support.", 500);
+    }
+  }
+
+  const raw =
+    (await EarningEvent.findById(event._id).lean()) || event?.toObject?.({ flattenMaps: true }) || event;
   const safePayload = auth.payload.role === "user" ? toPublicEarningEventJSON(raw) : raw;
   return ok({ data: safePayload }, 201);
 }

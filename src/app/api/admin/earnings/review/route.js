@@ -15,7 +15,9 @@ export async function POST(request) {
   if (!["approve", "reject"].includes(action)) return fail("action must be approve or reject", 400);
 
   const result = await applyEarningReview({ eventId, action, actorId: auth.payload.sub });
-  if (!result.ok) return fail(result.message || "Review failed", 400);
+  if (!result.ok) {
+    return fail(result.message || "Review failed", 400, result.reason ? { reason: result.reason } : {});
+  }
 
   return ok({ message: `Reward ${result.status}` });
 }
