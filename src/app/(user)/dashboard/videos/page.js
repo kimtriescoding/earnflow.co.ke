@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { UserAppShell } from "@/components/user/UserAppShell";
 import { UserDataTable } from "@/components/user/UserDataTable";
@@ -93,6 +93,8 @@ export default function VideosPage() {
   const [watchItem, setWatchItem] = useState(null);
   const [elapsed, setElapsed] = useState(0);
   const [claiming, setClaiming] = useState(false);
+  /** One auto-submit attempt per modal session; cleared on failure so we can retry. */
+  const autoSubmitStartedRef = useRef(false);
 
   const loadVideos = useCallback(() => {
     fetch("/api/modules/video/items")
@@ -120,19 +122,22 @@ export default function VideosPage() {
 
   useEffect(() => {
     setElapsed(0);
+    autoSubmitStartedRef.current = false;
   }, [watchItem?._id]);
 
   useEffect(() => {
     if (!watchItem) return undefined;
-    const id = window.setInterval(() => setElapsed((e) => e + 1), 1000);
-    return () => window.clearInterval(id);
+    const tick = window.setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => window.clearInterval(tick);
   }, [watchItem]);
 
   const threshold = watchItem ? Math.max(1, Number(watchItem.thresholdSeconds || 0)) : 0;
-  const canClaim = watchItem && elapsed >= threshold;
+  const thresholdMet = Boolean(watchItem && elapsed >= threshold);
 
-  async function claimReward() {
-    if (!watchItem || !canClaim) return;
+  const submitWatch = useCallback(async () => {
+    if (!watchItem) return;
+    const th = Math.max(1, Number(watchItem.thresholdSeconds || 0));
+    if (elapsed < th) return;
     setClaiming(true);
     try {
       const res = await fetch("/api/modules/video/watch", {
@@ -145,7 +150,7 @@ export default function VideosPage() {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success("Watch submitted. Reward is pending review.");
+        toast.success("Watch recorded. Reward is pending review.");
         setWatchItem(null);
         loadVideos();
         loadActivity();
@@ -153,10 +158,18 @@ export default function VideosPage() {
       } else {
         toast.error(data.message || "Could not submit watch.");
       }
+    } catch {
+      toast.error("Could not submit watch.");
     } finally {
       setClaiming(false);
     }
-  }
+  }, [watchItem, elapsed, loadVideos, loadActivity]);
+
+  useEffect(() => {
+    if (!watchItem || !thresholdMet || autoSubmitStartedRef.current || claiming) return;
+    autoSubmitStartedRef.current = true;
+    void submitWatch();
+  }, [watchItem, thresholdMet, claiming, submitWatch]);
 
   const historyColumns = [
     {
@@ -196,8 +209,8 @@ export default function VideosPage() {
       <div className="card-surface rounded-3xl section-card">
         <h2 className="heading-display text-lg font-semibold">Video earning</h2>
         <p className="mt-1 text-sm muted-text">
-          Open a video, watch for at least the required time on this page, then claim your reward. Each video can only be claimed once while
-          pending or approved.
+          Open a video and keep this page open. When you reach the required watch time, your watch is submitted automatically. Each video can
+          only be counted once while pending or approved.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <button
@@ -283,7 +296,11 @@ export default function VideosPage() {
                   Timer: <span className="font-mono tabular-nums text-[var(--foreground)]">{elapsed}s</span>
                   {" · "}
                   Need <span className="font-mono tabular-nums">{threshold}s</span>
-                  {!canClaim ? <span className="text-[var(--muted)]"> — keep this page open while watching</span> : null}
+                  {!thresholdMet ? (
+                    <span className="text-[var(--muted)]"> — keep this page open while watching</span>
+                  ) : (
+                    <span className="text-[var(--muted)]"> — submitting your watch…</span>
+                  )}
                 </p>
               </div>
               <button type="button" className="secondary-btn shrink-0 px-3 py-1.5 text-xs" onClick={() => setWatchItem(null)}>
@@ -323,30 +340,33 @@ export default function VideosPage() {
                   <AutoplaySoundHint />
                 </>
               ) : (
-                <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
-                  <p className="muted-text">Open the video in a new tab, then keep this window open so the timer can run.</p>
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-3 inline-flex font-medium text-[var(--brand)] underline underline-offset-2"
-                  >
-                    Open video
-                  </a>
-                </div>
+                <>
+                  <div className="aspect-video w-full overflow-hidden rounded-2xl bg-black">
+                    <iframe
+                      key={url}
+                      title={watchItem.title}
+                      src={url}
+                      className="h-full w-full border-0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                      referrerPolicy="no-referrer-when-downgrade"
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-[var(--muted)]">
+                    The video plays in this window. If it stays blank, the host may block embedding—YouTube, Vimeo, or a direct .mp4 link
+                    usually works best.
+                  </p>
+                </>
               )}
             </div>
-            <div className="flex flex-wrap gap-2 border-t border-[var(--border)] p-4 sm:p-5">
-              <button
-                type="button"
-                className="primary-btn px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!canClaim || claiming}
-                onClick={() => claimReward()}
-              >
-                {claiming ? "Submitting…" : canClaim ? "Claim reward" : `Watch ${Math.max(0, threshold - elapsed)}s more`}
-              </button>
-              <button type="button" className="secondary-btn px-4 py-2 text-sm" onClick={() => setWatchItem(null)}>
-                Cancel
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] p-4 sm:p-5">
+              <p className="text-sm text-[var(--muted)]">
+                {!thresholdMet
+                  ? `${Math.max(0, threshold - elapsed)}s left — your watch is sent automatically at ${threshold}s.`
+                  : "Hang on — confirming your watch…"}
+              </p>
+              <button type="button" className="secondary-btn px-4 py-2 text-sm" disabled={claiming} onClick={() => setWatchItem(null)}>
+                Close
               </button>
             </div>
           </div>
