@@ -57,7 +57,13 @@ export default function AdminWithdrawalsPage() {
 
   const columns = [
     { field: "user", header: "User", sortable: false, render: (row) => row.user?.username || "-" },
-    { field: "amount", header: "Amount", sortable: false, render: (row) => Number(row.amount || 0).toFixed(2) },
+    { field: "amount", header: "Amount (KES)", sortable: false, render: (row) => Number(row.amount || 0).toFixed(2) },
+    {
+      field: "fee",
+      header: "Fee (KES)",
+      sortable: false,
+      render: (row) => Number(row.fee ?? 0).toFixed(2),
+    },
     { field: "phoneNumber", header: "Phone", sortable: false },
     {
       field: "status",
