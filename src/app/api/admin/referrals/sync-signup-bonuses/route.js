@@ -1,7 +1,11 @@
 import connectDB from "@/lib/db";
 import User from "@/models/User";
 import mongoose from "mongoose";
-import { grantReferralSignupBonuses, reconcileReferralSignupBonusesForBeneficiary } from "@/lib/referrals/engine";
+import {
+  grantReferralSignupBonuses,
+  reconcileReferralSignupBonusesForBeneficiary,
+  uniqueUplineBeneficiaryIds,
+} from "@/lib/referrals/engine";
 import { requireAuth } from "@/lib/auth/guards";
 import { ok, fail } from "@/lib/api";
 
@@ -9,16 +13,6 @@ function isLikelyObjectIdString(value) {
   if (value.length !== 24) return false;
   if (!/^[a-f0-9]+$/i.test(value)) return false;
   return mongoose.Types.ObjectId.isValid(value);
-}
-
-function uniqueUplineBeneficiaryIds(userDoc) {
-  const keys = ["referredByUserId", "uplineL1UserId", "uplineL2UserId", "uplineL3UserId"];
-  const out = new Set();
-  for (const k of keys) {
-    const v = userDoc?.[k];
-    if (v) out.add(String(v));
-  }
-  return [...out];
 }
 
 /**

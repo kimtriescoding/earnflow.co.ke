@@ -19,11 +19,9 @@ function toUserObjectId(value) {
   return null;
 }
 
-/** Maps a signup referral code to upstream upline fields stored on the new user (L1 = inviter, L2/L3 = inviter’s sponsors). */
-export async function resolveReferralHierarchy(referralCode) {
-  if (!referralCode) return {};
-  const referrer = await User.findOne({ referralCode }).select("_id uplineL1UserId uplineL2UserId referredByUserId").lean();
-  if (!referrer) return {};
+/** L1 = inviter, L2/L3 = inviter’s sponsors (same semantics as signup `resolveReferralHierarchy`). */
+async function hierarchyFromReferrerLean(referrer) {
+  if (!referrer?._id) return {};
   const l2 = referrer.uplineL1UserId || referrer.referredByUserId || null;
   let l3 = referrer.uplineL2UserId || null;
   if (!l3 && l2) {
@@ -38,6 +36,23 @@ export async function resolveReferralHierarchy(referralCode) {
     uplineL2UserId: l2,
     uplineL3UserId: l3,
   };
+}
+
+/** Maps a signup referral code to upstream upline fields stored on the new user (L1 = inviter, L2/L3 = inviter’s sponsors). */
+export async function resolveReferralHierarchy(referralCode) {
+  if (!referralCode) return {};
+  const referrer = await User.findOne({ referralCode }).select("_id uplineL1UserId uplineL2UserId referredByUserId").lean();
+  if (!referrer) return {};
+  return hierarchyFromReferrerLean(referrer);
+}
+
+/** Resolve stored L1–L3 snapshot from an existing user id (admin reassignment / corrections). */
+export async function resolveReferralHierarchyFromReferrerId(referrerUserId) {
+  const bid = toUserObjectId(referrerUserId);
+  if (!bid) return {};
+  const referrer = await User.findById(bid).select("_id uplineL1UserId uplineL2UserId referredByUserId").lean();
+  if (!referrer) return {};
+  return hierarchyFromReferrerLean(referrer);
 }
 
 export { buildCommissionPlan };
@@ -369,6 +384,85 @@ export async function grantReferralSignupBonuses(newUser, context = {}) {
   for (const job of pendingWebPush) {
     void sendReferralCommissionWebPush(job).catch(() => {});
   }
+}
+
+/** Distinct upline ids on a user doc (for admin reconcile after hierarchy changes). */
+export function uniqueUplineBeneficiaryIds(userDoc) {
+  const keys = ["referredByUserId", "uplineL1UserId", "uplineL2UserId", "uplineL3UserId"];
+  const out = new Set();
+  for (const k of keys) {
+    const v = userDoc?.[k];
+    if (v) out.add(String(v));
+  }
+  return [...out];
+}
+
+/** True if making `subjectUserId` refer `proposedReferrerId` would close a cycle along `referredByUserId`. */
+export async function wouldCreateReferrerCycle(subjectUserId, proposedReferrerId) {
+  const sid = toUserObjectId(subjectUserId);
+  const rid = toUserObjectId(proposedReferrerId);
+  if (!sid || !rid) return true;
+  let cursor = rid;
+  const seen = new Set();
+  for (let i = 0; i < 64; i += 1) {
+    if (!cursor) return false;
+    if (String(cursor) === String(sid)) return true;
+    const key = String(cursor);
+    if (seen.has(key)) return true;
+    seen.add(key);
+    const row = await User.findById(cursor).select("referredByUserId").lean();
+    cursor = row?.referredByUserId ? toUserObjectId(row.referredByUserId) : null;
+  }
+  return true;
+}
+
+/**
+ * Sets the subject’s direct referrer and recomputes stored L2/L3 from that referrer’s chain (same as signup).
+ * Optionally runs idempotent signup commission grants for activated accounts.
+ */
+export async function adminAssignDirectReferrer(subjectUserId, referrerUserId, { distributeCommission = false } = {}) {
+  const sid = toUserObjectId(subjectUserId);
+  const rid = toUserObjectId(referrerUserId);
+  if (!sid || !rid) return { ok: false, error: "invalid_id" };
+
+  if (distributeCommission) {
+    const subjectRow = await User.findById(sid).select("isActivated").lean();
+    if (!subjectRow) return { ok: false, error: "subject_not_found" };
+    if (!subjectRow.isActivated) return { ok: false, error: "commission_requires_activation" };
+  }
+
+  const hierarchy = await resolveReferralHierarchyFromReferrerId(rid);
+  const directId = toUserObjectId(hierarchy.referredByUserId);
+  if (!directId) return { ok: false, error: "referrer_not_found" };
+  if (String(sid) === String(directId)) return { ok: false, error: "self_referral" };
+  if (await wouldCreateReferrerCycle(sid, directId)) return { ok: false, error: "referrer_cycle" };
+
+  await User.findByIdAndUpdate(sid, {
+    referredByUserId: hierarchy.referredByUserId,
+    uplineL1UserId: hierarchy.uplineL1UserId ?? directId,
+    uplineL2UserId: hierarchy.uplineL2UserId ?? null,
+    uplineL3UserId: hierarchy.uplineL3UserId ?? null,
+  });
+
+  const updated = await User.findById(sid);
+  if (!updated) return { ok: false, error: "subject_not_found" };
+
+  let commission = { ran: false, reconciledAccounts: 0 };
+  if (distributeCommission) {
+    await grantReferralSignupBonuses(updated, {
+      verifiedActivation: true,
+      activationPaymentId: `admin_assign_referrer:${String(sid)}:${Date.now()}`,
+    });
+    const uplineIds = uniqueUplineBeneficiaryIds(updated.toObject ? updated.toObject() : updated);
+    let reconciledAccounts = 0;
+    for (const bid of uplineIds) {
+      const r = await reconcileReferralSignupBonusesForBeneficiary(bid);
+      reconciledAccounts += Number(r.processed || 0);
+    }
+    commission = { ran: true, reconciledAccounts, uplineIds };
+  }
+
+  return { ok: true, hierarchy, commission };
 }
 
 /**

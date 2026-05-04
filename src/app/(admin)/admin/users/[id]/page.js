@@ -17,6 +17,11 @@ export default function AdminUserDetailPage() {
   const [passwordReset, setPasswordReset] = useState({ password: "", confirmPassword: "" });
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [activityTab, setActivityTab] = useState("transactions");
+  const [referrerAssign, setReferrerAssign] = useState({
+    referrer: "",
+    distributeCommission: false,
+    loading: false,
+  });
 
   const user = payload?.user;
   const wallet = payload?.wallet;
@@ -143,6 +148,44 @@ export default function AdminUserDetailPage() {
       await fetchUserData();
     } else {
       toast.error(data.message || "Update failed.");
+    }
+  }
+
+  async function assignReferrer() {
+    const referrer = String(referrerAssign.referrer || "").trim();
+    if (!referrer || !userId) {
+      toast.error("Enter the referrer username or user id.");
+      return;
+    }
+    if (referral.referrer?.username || referral.uplineL1?.username) {
+      const okConfirm = window.confirm(
+        "Replace this user’s current direct referrer? Existing signup commissions are not reversed; new payouts only apply for missing lines when distribution is enabled."
+      );
+      if (!okConfirm) return;
+    }
+    setReferrerAssign((p) => ({ ...p, loading: true }));
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/referrer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          referrer,
+          distributeCommission: referrerAssign.distributeCommission,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.success) {
+        toast.success(data.message || "Referrer updated.");
+        setReferrerAssign({ referrer: "", distributeCommission: false, loading: false });
+        setLoading(true);
+        await fetchUserData();
+      } else {
+        toast.error(data.message || "Referrer assignment failed.");
+        setReferrerAssign((p) => ({ ...p, loading: false }));
+      }
+    } catch {
+      toast.error("Network error.");
+      setReferrerAssign((p) => ({ ...p, loading: false }));
     }
   }
 
@@ -320,6 +363,45 @@ export default function AdminUserDetailPage() {
               <p>Level 1 upline: {referral.uplineL1?.username || "-"}</p>
               <p>Level 2 upline: {referral.uplineL2?.username || "-"}</p>
               <p>Level 3 upline: {referral.uplineL3?.username || "-"}</p>
+            </div>
+
+            <div className="mt-5 border-t border-[var(--border)] pt-5">
+              <p className="text-xs uppercase tracking-[0.12em] muted-text">Assign direct referrer</p>
+              <p className="mt-1 max-w-2xl text-sm muted-text">
+                Set only the direct referrer (L1). Level 2 and 3 are derived from that member&apos;s upline, matching signup behavior.
+              </p>
+              <div className="mt-4 grid gap-3 sm:max-w-md">
+                <input
+                  className="interactive-control focus-ring px-3.5 py-2.5 text-sm"
+                  value={referrerAssign.referrer}
+                  onChange={(e) => setReferrerAssign((p) => ({ ...p, referrer: e.target.value }))}
+                  placeholder="Referrer username or user id"
+                  disabled={referrerAssign.loading}
+                />
+                <label className="flex cursor-pointer items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1 rounded border-[var(--border)]"
+                    checked={referrerAssign.distributeCommission}
+                    onChange={(e) => setReferrerAssign((p) => ({ ...p, distributeCommission: e.target.checked }))}
+                    disabled={referrerAssign.loading || !user?.isActivated}
+                  />
+                  <span>
+                    Distribute signup commissions now (activated accounts only; idempotent — no duplicate payouts).
+                    {!user?.isActivated ? (
+                      <span className="mt-0.5 block text-xs muted-text">Activate this user first to enable commission distribution.</span>
+                    ) : null}
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void assignReferrer()}
+                  className="primary-btn w-fit px-4 py-2 text-sm disabled:opacity-60"
+                  disabled={referrerAssign.loading || !String(referrerAssign.referrer || "").trim()}
+                >
+                  {referrerAssign.loading ? "Saving…" : "Assign referrer"}
+                </button>
+              </div>
             </div>
           </div>
 
