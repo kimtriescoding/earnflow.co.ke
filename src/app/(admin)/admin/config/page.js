@@ -180,7 +180,7 @@ export default function AdminConfigPage() {
             {withdrawalFeeMode === "tiers" ? (
               <div className="mt-3 space-y-2">
                 {withdrawalFeeTiers.map((tier, index) => (
-                  <div key={`${tier.minAmount}-${tier.maxAmount}-${index}`} className="grid gap-2 md:grid-cols-3">
+                  <div key={index} className="grid gap-2 md:grid-cols-3">
                     <input
                       className="interactive-control focus-ring px-3.5 py-2.5 text-sm"
                       value={tier.minAmount}
