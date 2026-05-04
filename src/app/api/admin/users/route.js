@@ -7,6 +7,10 @@ import { ok, fail } from "@/lib/api";
 import { Types } from "mongoose";
 import { ADMIN_MANAGEABLE_ROLES, INTERNAL_ONLY_ROLES, isSuperadminRole } from "@/lib/auth/roles";
 
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function buildSearchFilter(rawSearch) {
   const search = String(rawSearch || "").trim();
   if (!search) return {};
@@ -20,8 +24,20 @@ function buildSearchFilter(rawSearch) {
 
   return {
     $and: terms.map((term) => {
-      const regex = { $regex: term, $options: "i" };
+      const safeTerm = escapeRegex(term);
+      const regex = { $regex: safeTerm, $options: "i" };
       const or = [{ username: regex }, { email: regex }, { phoneNumber: regex }, { referralCode: regex }, { role: regex }];
+
+      const lowered = term.toLowerCase();
+      if (lowered.includes("@")) or.push({ email: lowered });
+      if (/^[a-z0-9._-]{3,}$/i.test(term)) or.push({ username: term });
+
+      const digits = term.replace(/\D/g, "");
+      if (digits.length >= 3) {
+        const loosePhonePattern = digits.split("").map(escapeRegex).join("\\D*");
+        or.push({ phoneNumber: { $regex: loosePhonePattern, $options: "i" } });
+      }
+
       if (Types.ObjectId.isValid(term)) or.push({ _id: new Types.ObjectId(term) });
       return { $or: or };
     }),

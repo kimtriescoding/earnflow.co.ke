@@ -17,8 +17,12 @@ export function sanitizeWithdrawalFeeTiers(rawTiers) {
   const normalized = source
     .map((tier) => {
       const minAmount = Number(tier?.minAmount ?? tier?.min ?? 0);
-      const hasMax = tier?.maxAmount !== null && tier?.maxAmount !== undefined && tier?.max !== null && tier?.max !== undefined;
       const maxSource = tier?.maxAmount ?? tier?.max;
+      const maxUnset =
+        maxSource === null ||
+        maxSource === undefined ||
+        (typeof maxSource === "string" && maxSource.trim() === "");
+      const hasMax = !maxUnset;
       const maxAmount = hasMax ? Number(maxSource) : null;
       const fee = Number(tier?.fee ?? 0);
       return {

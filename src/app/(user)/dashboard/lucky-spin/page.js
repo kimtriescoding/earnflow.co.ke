@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UserAppShell } from "@/components/user/UserAppShell";
 import { toast } from "sonner";
 import { LuckySpinWheel } from "./LuckySpinWheel";
+
+const LUCKY_SPIN_CHECKOUT_POLL_KEY = "lucky_spin_checkout_topup";
 
 export default function LuckySpinPage() {
   const [loading, setLoading] = useState(false);
@@ -18,24 +20,78 @@ export default function LuckySpinPage() {
   const [minBetAmount, setMinBetAmount] = useState(30);
 
   async function loadLuckySpinState() {
-    const [configRes, walletRes] = await Promise.all([fetch("/api/modules/games/spin"), fetch("/api/modules/games/spin/wallet")]);
+    const t = Date.now();
+    const [configRes, walletRes] = await Promise.all([
+      fetch(`/api/modules/games/spin?t=${t}`, { cache: "no-store" }),
+      fetch(`/api/modules/games/spin/wallet?t=${t}`, { cache: "no-store" }),
+    ]);
     const [configData, walletData] = await Promise.all([configRes.json(), walletRes.json()]);
 
+    let nextBalance = 0;
     if (configData?.success) {
       setSegmentCount(Number(configData.data?.segmentCount || 6));
       setMinBetAmount(Number(configData.data?.minBetAmount || 30));
-      setWalletBalance(Number(configData.data?.balance || 0));
+      nextBalance = Number(configData.data?.balance || 0);
+      setWalletBalance(nextBalance);
       setBetAmount((prev) => (prev ? prev : String(configData.data?.minBetAmount || 30)));
     }
     if (walletData?.success) {
       const wallet = walletData.data?.wallet || {};
-      setWalletBalance(Number(wallet.balance || 0));
+      nextBalance = Number(wallet.balance || 0);
+      setWalletBalance(nextBalance);
     }
+    return nextBalance;
   }
 
+  const checkoutPollTimer = useRef(null);
+
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      loadLuckySpinState().catch(() => {});
+    let cancelled = false;
+
+    const clearCheckoutPoll = () => {
+      if (checkoutPollTimer.current) {
+        window.clearTimeout(checkoutPollTimer.current);
+        checkoutPollTimer.current = null;
+      }
+    };
+
+    function startCheckoutCompletionPoll(prevBalance, startedAt) {
+      const credited = (b) => b > Number(prevBalance || 0) + 1e-6;
+      const maxWaitMs = 60_000;
+
+      const step = async () => {
+        if (cancelled) return;
+        const b = await loadLuckySpinState().catch(() => null);
+        if (cancelled || b === null) return;
+        if (credited(b)) {
+          clearCheckoutPoll();
+          try {
+            sessionStorage.removeItem(LUCKY_SPIN_CHECKOUT_POLL_KEY);
+          } catch {
+            /* ignore */
+          }
+          toast.success("Lucky Spin balance updated.");
+          return;
+        }
+        if (Date.now() - startedAt > maxWaitMs) {
+          clearCheckoutPoll();
+          try {
+            sessionStorage.removeItem(LUCKY_SPIN_CHECKOUT_POLL_KEY);
+          } catch {
+            /* ignore */
+          }
+          return;
+        }
+        checkoutPollTimer.current = window.setTimeout(step, 900);
+      };
+
+      checkoutPollTimer.current = window.setTimeout(step, 400);
+    }
+
+    (async () => {
+      await loadLuckySpinState().catch(() => {});
+      if (cancelled) return;
+
       fetch("/api/auth/me")
         .then((res) => res.json())
         .then((data) => {
@@ -45,8 +101,48 @@ export default function LuckySpinPage() {
           setPhoneNumber((prev) => (String(prev || "").trim() ? prev : userPhone));
         })
         .catch(() => {});
-    }, 0);
-    return () => window.clearTimeout(timer);
+
+      let raw = null;
+      try {
+        raw = sessionStorage.getItem(LUCKY_SPIN_CHECKOUT_POLL_KEY);
+      } catch {
+        /* ignore */
+      }
+      if (!raw || cancelled) return;
+      try {
+        const parsed = JSON.parse(raw);
+        const prevBalance = Number(parsed.prevBalance ?? 0);
+        const startedAt = Number(parsed.startedAt ?? Date.now());
+        startCheckoutCompletionPoll(prevBalance, startedAt);
+      } catch {
+        try {
+          sessionStorage.removeItem(LUCKY_SPIN_CHECKOUT_POLL_KEY);
+        } catch {
+          /* ignore */
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      clearCheckoutPoll();
+    };
+  }, []);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      loadLuckySpinState().catch(() => {});
+    };
+    const onPageShow = (e) => {
+      if (e.persisted) loadLuckySpinState().catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
+    };
   }, []);
 
   async function spinNow() {
@@ -118,7 +214,17 @@ export default function LuckySpinPage() {
     const data = await res.json();
     if (!data.success) return toast.error(data.message || "Checkout top-up failed.");
     const checkoutUrl = data.data?.checkoutUrl;
-    if (checkoutUrl) window.location.href = checkoutUrl;
+    if (checkoutUrl) {
+      try {
+        sessionStorage.setItem(
+          LUCKY_SPIN_CHECKOUT_POLL_KEY,
+          JSON.stringify({ startedAt: Date.now(), prevBalance: Number(walletBalance || 0) })
+        );
+      } catch {
+        /* ignore */
+      }
+      window.location.href = checkoutUrl;
+    }
   }
 
   return (
