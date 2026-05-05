@@ -425,11 +425,12 @@ export async function adminAssignDirectReferrer(subjectUserId, referrerUserId, {
   const rid = toUserObjectId(referrerUserId);
   if (!sid || !rid) return { ok: false, error: "invalid_id" };
 
-  if (distributeCommission) {
-    const subjectRow = await User.findById(sid).select("isActivated").lean();
-    if (!subjectRow) return { ok: false, error: "subject_not_found" };
-    if (!subjectRow.isActivated) return { ok: false, error: "commission_requires_activation" };
+  const subjectRow = await User.findById(sid).select("isActivated referredByUserId uplineL1UserId").lean();
+  if (!subjectRow) return { ok: false, error: "subject_not_found" };
+  if (toUserObjectId(subjectRow.referredByUserId) || toUserObjectId(subjectRow.uplineL1UserId)) {
+    return { ok: false, error: "already_has_direct_referrer" };
   }
+  if (distributeCommission && !subjectRow.isActivated) return { ok: false, error: "commission_requires_activation" };
 
   const hierarchy = await resolveReferralHierarchyFromReferrerId(rid);
   const directId = toUserObjectId(hierarchy.referredByUserId);

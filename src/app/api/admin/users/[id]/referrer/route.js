@@ -24,7 +24,7 @@ async function resolveReferrerUserId(identifier) {
 }
 
 /**
- * Assign or replace direct referrer for a user; L2/L3 stored uplines follow the same rules as signup.
+ * Assign direct referrer only when the user has none yet; L2/L3 follow signup rules.
  * Optional `distributeCommission` runs idempotent signup bonus payouts for activated accounts.
  */
 export async function POST(request, { params }) {
@@ -56,7 +56,9 @@ export async function POST(request, { params }) {
             ? "That assignment would create a referral cycle"
             : result.error === "commission_requires_activation"
               ? "Commission distribution requires an activated account"
-              : result.error === "invalid_id"
+              : result.error === "already_has_direct_referrer"
+                ? "This user already has a direct referrer"
+                : result.error === "invalid_id"
                 ? "Invalid user id"
                 : result.error === "subject_not_found"
                   ? "User not found"

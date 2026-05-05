@@ -16,15 +16,20 @@ export function sanitizeWithdrawalFeeTiers(rawTiers) {
   const source = Array.isArray(rawTiers) && rawTiers.length ? rawTiers : DEFAULT_WITHDRAWAL_FEE_TIERS;
   const normalized = source
     .map((tier) => {
-      const minAmount = Number(tier?.minAmount ?? tier?.min ?? 0);
-      const maxSource = tier?.maxAmount ?? tier?.max;
+      const minAmount = Number(tier?.minAmount ?? tier?.min_amount ?? tier?.min ?? 0);
+      const maxSource = tier?.maxAmount ?? tier?.max_amount ?? tier?.max;
+      const maxNum = Number(maxSource);
+      // Blank / missing → no cap. 0 or negative max must not mean "only amount zero matches"
+      // (common bad payload: Number("") === 0 or legacy saves).
       const maxUnset =
         maxSource === null ||
         maxSource === undefined ||
-        (typeof maxSource === "string" && maxSource.trim() === "");
+        (typeof maxSource === "string" && maxSource.trim() === "") ||
+        !Number.isFinite(maxNum) ||
+        maxNum <= 0;
       const hasMax = !maxUnset;
-      const maxAmount = hasMax ? Number(maxSource) : null;
-      const fee = Number(tier?.fee ?? 0);
+      const maxAmount = hasMax ? maxNum : null;
+      const fee = Number(tier?.fee ?? tier?.tier_fee ?? tier?.withdrawalFee ?? 0);
       return {
         minAmount: Number.isFinite(minAmount) ? Math.max(0, Number(minAmount.toFixed(2))) : 0,
         maxAmount: hasMax && Number.isFinite(maxAmount) ? Math.max(0, Number(maxAmount.toFixed(2))) : null,
@@ -38,12 +43,19 @@ export function sanitizeWithdrawalFeeTiers(rawTiers) {
 function feeFromTiers(amount, tiers) {
   const a = Math.max(0, Number(amount) || 0);
   const normalizedTiers = sanitizeWithdrawalFeeTiers(tiers);
-  const matched = normalizedTiers.find((tier) => {
+  const exact = normalizedTiers.find((tier) => {
     const minPass = a >= tier.minAmount;
     const maxPass = tier.maxAmount == null ? true : a <= tier.maxAmount;
     return minPass && maxPass;
   });
-  return Number(Math.max(0, Number(matched?.fee || 0)).toFixed(2));
+  if (exact) {
+    return Number(Math.max(0, Number(exact.fee || 0)).toFixed(2));
+  }
+  // Gaps or amounts above an explicit top max: use the tier with the highest min still ≤ amount.
+  const eligible = normalizedTiers.filter((t) => a >= t.minAmount);
+  if (!eligible.length) return 0;
+  const picked = eligible.reduce((best, t) => (t.minAmount > best.minAmount ? t : best));
+  return Number(Math.max(0, Number(picked.fee || 0)).toFixed(2));
 }
 
 export function computeWithdrawalFee(amount, mode, feeValue, tiers = DEFAULT_WITHDRAWAL_FEE_TIERS) {

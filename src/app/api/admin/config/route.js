@@ -105,5 +105,16 @@ export async function POST(request) {
   if (body.module_status) {
     deleteCache("settings:module_status");
   }
+  const settingsCacheKeys = [
+    "withdrawal_fee_mode",
+    "withdrawal_fee_value",
+    "withdrawal_fee_tiers",
+    "min_withdrawal_amount",
+  ];
+  for (const k of settingsCacheKeys) {
+    if (Object.prototype.hasOwnProperty.call(body, k)) {
+      deleteCache(`settings:${k}`);
+    }
+  }
   return ok({ message: "Configuration updated" });
 }
