@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import connectDB from "@/lib/db";
-import { getSetting } from "@/models/Settings";
+import { getCachedSetting } from "@/lib/settings/cached-settings";
 import { isModuleEnabled } from "@/lib/modules/module-access";
 
 /**
@@ -8,8 +7,7 @@ import { isModuleEnabled } from "@/lib/modules/module-access";
  * @param {"video" | "task" | "game" | "academic" | "chat" | "lucky_spin" | "aviator"} moduleKey — `game` is deprecated; use `lucky_spin` / `aviator`.
  */
 export async function assertUserModuleEnabled(moduleKey) {
-  await connectDB();
-  const raw = await getSetting("module_status", {});
+  const raw = await getCachedSetting("module_status", {});
   if (!isModuleEnabled(raw, moduleKey)) {
     redirect("/dashboard");
   }

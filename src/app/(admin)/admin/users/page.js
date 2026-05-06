@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Star } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/ui/AppShell";
@@ -61,6 +62,7 @@ function LeaderboardRow({ rank, userId, username, email, amount }) {
 }
 
 export default function AdminUsersPage() {
+  const router = useRouter();
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState({ activated: 0, elevatedRoleCount: 0, totalWithdrawableKes: 0, minWithdrawalAmount: 0 });
@@ -127,7 +129,7 @@ export default function AdminUsersPage() {
     const data = await res.json();
     if (data.success) {
       toast.success("Impersonation started.");
-      window.location.href = "/dashboard";
+      router.push("/dashboard");
     } else {
       toast.error(data.message || "Impersonation failed.");
     }

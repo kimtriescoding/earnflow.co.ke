@@ -42,18 +42,7 @@ export default function LoginPageClient() {
   }
 
   async function confirmSessionAndRedirect(targetPath) {
-    for (let i = 0; i < 4; i += 1) {
-      try {
-        const meRes = await fetch("/api/auth/me?lite=1", { credentials: "include" });
-        const meData = await meRes.json().catch(() => ({}));
-        if (meData?.success) break;
-      } catch {}
-      await new Promise((resolve) => setTimeout(resolve, 180 + i * 140));
-    }
     router.replace(targetPath);
-    window.setTimeout(() => {
-      window.location.assign(targetPath);
-    }, 260);
   }
 
   async function fetchSetupSecret() {

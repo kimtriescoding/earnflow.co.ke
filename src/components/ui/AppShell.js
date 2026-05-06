@@ -1,13 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { HeaderProfileMenu } from "./HeaderProfileMenu";
 
 export function AppShell({ title, navItems, children, rightSlot, compactSidebar = false, hideHeader = false }) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const startedAt = Number(window.sessionStorage.getItem("tw_nav_started_at") || 0);
+    const target = window.sessionStorage.getItem("tw_nav_target") || "";
+    const now = Date.now();
+    if (!startedAt || now - startedAt > 20_000) return;
+    if (target && pathname && !pathname.startsWith(target)) return;
+    const durationMs = now - startedAt;
+    if (window.performance.getEntriesByName("tw_nav_click").length > 0) {
+      window.performance.mark("tw_nav_paint");
+      window.performance.measure("tw_nav_transition", "tw_nav_click", "tw_nav_paint");
+    }
+    window.sessionStorage.removeItem("tw_nav_started_at");
+    window.sessionStorage.removeItem("tw_nav_target");
+    if (process.env.NODE_ENV !== "production") {
+      console.info(`[nav-metric] ${pathname} ${durationMs}ms`);
+    }
+  }, [pathname]);
 
   return (
     <div className="page-shell soft-gradient">

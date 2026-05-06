@@ -2,8 +2,8 @@ import connectDB from "@/lib/db";
 import User from "@/models/User";
 import { createTtlCache } from "@/lib/cache/ttl-cache";
 
-const USER_STATE_CACHE = createTtlCache("session-user-state", 15_000);
-const USER_PROFILE_CACHE = createTtlCache("session-user-profile", 15_000);
+const USER_STATE_CACHE = createTtlCache("session-user-state", 60_000);
+const USER_PROFILE_CACHE = createTtlCache("session-user-profile", 60_000);
 
 export async function getCachedSessionUserState(userId) {
   const key = String(userId || "");

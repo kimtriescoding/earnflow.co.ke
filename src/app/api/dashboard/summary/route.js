@@ -23,6 +23,7 @@ import { createTtlCache } from "@/lib/cache/ttl-cache";
 const SUMMARY_CACHE = createTtlCache("dashboard-summary", 20_000);
 
 export async function GET() {
+  const start = performance.now();
   const auth = await requireAuth(["user", "admin"]);
   if (auth.error) return auth.error;
   await connectDB();
@@ -155,5 +156,7 @@ export async function GET() {
     todaysEarningsTimeZone: DASHBOARD_EARNINGS_TIMEZONE,
   };
   SUMMARY_CACHE.set(userIdStr, data);
-  return ok({ data });
+  const response = ok({ data });
+  response.headers.set("Server-Timing", `api_dashboard_summary;dur=${(performance.now() - start).toFixed(1)}`);
+  return response;
 }

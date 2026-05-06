@@ -25,6 +25,9 @@ function urlBase64ToUint8Array(base64String) {
 /** web-push `generate-vapid-keys` public key decodes to 65 bytes (uncompressed P-256). */
 const EXPECTED_VAPID_PUBLIC_KEY_BYTES = 65;
 const NOTIFICATION_POLL_MS = 45_000;
+const NOTIFICATION_CACHE_TTL_MS = 15_000;
+let notificationsCache = { items: [], unreadCount: 0, updatedAt: 0 };
+let notificationsInflight = null;
 
 function isLocalPushDevHostname() {
   if (typeof window === "undefined") return false;
@@ -96,14 +99,25 @@ export function UserNotificationsBell() {
   const seededRef = useRef(false);
   const rootRef = useRef(null);
 
-  const fetchNotifications = useCallback(async (opts = { silent: false }) => {
+  const fetchNotifications = useCallback(async (opts = { silent: false, force: false }) => {
+    const now = Date.now();
+    if (!opts.force && now - notificationsCache.updatedAt < NOTIFICATION_CACHE_TTL_MS) {
+      setItems(notificationsCache.items);
+      setUnreadCount(notificationsCache.unreadCount);
+      return;
+    }
+    if (!opts.force && notificationsInflight) {
+      await notificationsInflight;
+      return;
+    }
     if (!opts.silent) setLoading(true);
     try {
-      const res = await fetch("/api/user/notifications?limit=40");
-      const data = await res.json();
+      notificationsInflight = fetch("/api/user/notifications?limit=40").then((res) => res.json());
+      const data = await notificationsInflight;
       if (!data.success) return;
       const list = data.data?.items || [];
       const unread = Number(data.data?.unreadCount || 0);
+      notificationsCache = { items: list, unreadCount: unread, updatedAt: Date.now() };
       setItems(list);
       setUnreadCount(unread);
 
@@ -129,6 +143,7 @@ export function UserNotificationsBell() {
     } catch {
       /* ignore */
     } finally {
+      notificationsInflight = null;
       if (!opts.silent) setLoading(false);
     }
   }, []);

@@ -64,8 +64,15 @@ export function Sidebar({ items = [], onNavigate, collapsed = false }) {
           <Link
             key={item.href}
             href={item.href}
-            prefetch={false}
-            onClick={() => onNavigate?.()}
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                const href = item.href || "/";
+                window.sessionStorage.setItem("tw_nav_target", href);
+                window.sessionStorage.setItem("tw_nav_started_at", String(Date.now()));
+                window.performance.mark("tw_nav_click");
+              }
+              onNavigate?.();
+            }}
             title={collapsed ? item.label : undefined}
             aria-label={collapsed ? item.label : undefined}
             className={`group flex min-h-12 items-center rounded-2xl px-3 py-2.5 text-sm transition-all duration-200 ${

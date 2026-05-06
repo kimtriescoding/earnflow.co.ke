@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AppShell } from "@/components/ui/AppShell";
 import { adminNavItems } from "@/lib/nav/admin-nav";
@@ -10,6 +10,7 @@ import { StatusChip } from "@/components/ui/StatusChip";
 
 export default function AdminUserDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const userId = params.id;
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +94,7 @@ export default function AdminUserDetailPage() {
       const data = await res.json();
       if (data.success) {
         toast.success("Impersonation started.");
-        window.location.href = "/dashboard";
+        router.push("/dashboard");
       } else {
         toast.error(data.message || "Impersonation failed.");
       }
@@ -107,7 +108,7 @@ export default function AdminUserDetailPage() {
       const data = await res.json();
       if (data.success) {
         toast.success("User deleted.");
-        window.location.href = "/admin/users";
+        router.push("/admin/users");
       } else {
         toast.error(data.message || "Delete failed.");
       }

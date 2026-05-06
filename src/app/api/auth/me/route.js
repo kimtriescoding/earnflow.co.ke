@@ -6,6 +6,7 @@ import connectDB from "@/lib/db";
 import { getCachedSessionUserProfile } from "@/lib/auth/session-state";
 
 export async function GET(request) {
+  const start = performance.now();
   const auth = await requireAuth(["user", "client", "admin", "support"]);
   if (auth.error) return auth.error;
   const { searchParams } = new URL(request.url);
@@ -24,7 +25,7 @@ export async function GET(request) {
   const isBlocked = Boolean(user?.isBlocked);
   const isActivated = Boolean(user?.isActivated);
 
-  return ok({
+  const response = ok({
     data: {
       id: auth.payload.sub,
       username: user?.username || auth.payload.username || "user",
@@ -41,6 +42,8 @@ export async function GET(request) {
       mfaVerified: Boolean(auth.payload.mfa_verified),
     },
   });
+  response.headers.set("Server-Timing", `api_auth_me;dur=${(performance.now() - start).toFixed(1)}`);
+  return response;
 }
 
 export async function PATCH(request) {

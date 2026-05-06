@@ -2,27 +2,45 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronDown, LogOut, UserRound, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { ROLE } from "@/lib/auth/roles";
 
+const DEFAULT_PROFILE = { username: "User", role: "user", impersonatedBy: null };
+let profileCache = null;
+let profileInflight = null;
+
+async function fetchProfileLite() {
+  if (profileCache) return profileCache;
+  if (profileInflight) return profileInflight;
+  profileInflight = fetch("/api/auth/me?lite=1")
+    .then((res) => res.json())
+    .then((data) => {
+      if (!data?.success) return DEFAULT_PROFILE;
+      profileCache = {
+        username: data.data?.username || "User",
+        role: data.data?.role || "user",
+        impersonatedBy: data.data?.impersonatedBy || null,
+      };
+      return profileCache;
+    })
+    .catch(() => DEFAULT_PROFILE)
+    .finally(() => {
+      profileInflight = null;
+    });
+  return profileInflight;
+}
+
 export function HeaderProfileMenu({ compact = false }) {
-  const [profile, setProfile] = useState({ username: "User", role: "user", impersonatedBy: null });
+  const router = useRouter();
+  const [profile, setProfile] = useState(profileCache || DEFAULT_PROFILE);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(async () => {
-      try {
-        const res = await fetch("/api/auth/me?lite=1");
-        const data = await res.json();
-        if (data.success) {
-          setProfile({
-            username: data.data?.username || "User",
-            role: data.data?.role || "user",
-            impersonatedBy: data.data?.impersonatedBy || null,
-          });
-        }
-      } catch {}
+      const next = await fetchProfileLite();
+      setProfile(next);
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -39,7 +57,7 @@ export function HeaderProfileMenu({ compact = false }) {
       toast.error("Unable to log out.");
       return;
     }
-    window.location.href = "/login";
+    router.replace("/login");
   }
 
   async function endImpersonation() {
@@ -50,7 +68,7 @@ export function HeaderProfileMenu({ compact = false }) {
       return;
     }
     toast.success("Impersonation ended.");
-    window.location.href = "/admin/users";
+    router.replace("/admin/users");
   }
 
   const profileHref = [ROLE.ADMIN, ROLE.SUPPORT, ROLE.SUPERADMIN].includes(String(profile.role || ""))

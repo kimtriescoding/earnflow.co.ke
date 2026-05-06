@@ -16,6 +16,7 @@ function sanitizeMetadata(metadata) {
 }
 
 export async function GET(request) {
+  const start = performance.now();
   const auth = await requireAuth(["user", "admin"]);
   if (auth.error) return auth.error;
   await connectDB();
@@ -96,5 +97,7 @@ export async function GET(request) {
 
   const merged = mergedFull.slice((boundedPage - 1) * pageSize, boundedPage * pageSize);
 
-  return ok({ data: merged, total: mergedFull.length, page: boundedPage, pageSize });
+  const response = ok({ data: merged, total: mergedFull.length, page: boundedPage, pageSize });
+  response.headers.set("Server-Timing", `api_dashboard_activity;dur=${(performance.now() - start).toFixed(1)}`);
+  return response;
 }
