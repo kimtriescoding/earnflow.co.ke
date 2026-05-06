@@ -26,15 +26,30 @@ export default function DashboardPage() {
   const [activity, setActivity] = useState([]);
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/dashboard/summary").then((res) => res.json()),
-      fetch("/api/dashboard/activity?page=1&pageSize=10").then((res) => res.json()),
-    ])
-      .then(([summaryRes, activityRes]) => {
-        if (summaryRes?.success && summaryRes?.data) setSummary(summaryRes.data);
-        if (activityRes?.success) setActivity(activityRes.data || []);
+    let cancelled = false;
+
+    fetch("/api/dashboard/summary")
+      .then((res) => res.json())
+      .then((summaryRes) => {
+        if (!cancelled && summaryRes?.success && summaryRes?.data) {
+          setSummary(summaryRes.data);
+        }
       })
       .catch(() => {});
+
+    const timer = window.setTimeout(() => {
+      fetch("/api/dashboard/activity?page=1&pageSize=10")
+        .then((res) => res.json())
+        .then((activityRes) => {
+          if (!cancelled && activityRes?.success) setActivity(activityRes.data || []);
+        })
+        .catch(() => {});
+    }, 120);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, []);
 
   const inviteLink = useMemo(() => {

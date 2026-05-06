@@ -13,7 +13,7 @@ export function HeaderProfileMenu({ compact = false }) {
   useEffect(() => {
     const timer = window.setTimeout(async () => {
       try {
-        const res = await fetch("/api/auth/me");
+        const res = await fetch("/api/auth/me?lite=1");
         const data = await res.json();
         if (data.success) {
           setProfile({

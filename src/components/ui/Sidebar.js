@@ -64,6 +64,7 @@ export function Sidebar({ items = [], onNavigate, collapsed = false }) {
           <Link
             key={item.href}
             href={item.href}
+            prefetch={false}
             onClick={() => onNavigate?.()}
             title={collapsed ? item.label : undefined}
             aria-label={collapsed ? item.label : undefined}

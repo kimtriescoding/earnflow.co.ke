@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -26,6 +26,13 @@ export default function LoginPageClient() {
   const qrCodeUrl = otpAuthUrl
     ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(otpAuthUrl)}`
     : "";
+
+  useEffect(() => {
+    router.prefetch("/dashboard");
+    router.prefetch("/activate");
+    router.prefetch("/client");
+    router.prefetch("/admin");
+  }, [router]);
 
   async function fetchSetupSecret() {
     const setupRes = await fetch("/api/auth/2fa/setup", { method: "POST", credentials: "include" });
@@ -72,13 +79,13 @@ export default function LoginPageClient() {
 
       toast.success("Login successful.");
       if ([ROLE.ADMIN, ROLE.SUPPORT, ROLE.SUPERADMIN].includes(String(data.role || ""))) {
-        router.push("/admin");
+        router.replace("/admin");
       } else if (data.role === "client") {
-        router.push("/client");
+        router.replace("/client");
       } else if (!data.isActivated) {
-        router.push("/activate");
+        router.replace("/activate");
       } else {
-        router.push("/dashboard");
+        router.replace("/dashboard");
       }
       return;
     }
