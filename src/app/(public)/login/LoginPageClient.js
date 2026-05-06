@@ -34,6 +34,28 @@ export default function LoginPageClient() {
     router.prefetch("/admin");
   }, [router]);
 
+  function getPostLoginPath(data) {
+    if ([ROLE.ADMIN, ROLE.SUPPORT, ROLE.SUPERADMIN].includes(String(data?.role || ""))) return "/admin";
+    if (data?.role === "client") return "/client";
+    if (!data?.isActivated) return "/activate";
+    return "/dashboard";
+  }
+
+  async function confirmSessionAndRedirect(targetPath) {
+    for (let i = 0; i < 4; i += 1) {
+      try {
+        const meRes = await fetch("/api/auth/me?lite=1", { credentials: "include" });
+        const meData = await meRes.json().catch(() => ({}));
+        if (meData?.success) break;
+      } catch {}
+      await new Promise((resolve) => setTimeout(resolve, 180 + i * 140));
+    }
+    router.replace(targetPath);
+    window.setTimeout(() => {
+      window.location.assign(targetPath);
+    }, 260);
+  }
+
   async function fetchSetupSecret() {
     const setupRes = await fetch("/api/auth/2fa/setup", { method: "POST", credentials: "include" });
     const setupData = await setupRes.json().catch(() => ({}));
@@ -78,15 +100,8 @@ export default function LoginPageClient() {
       }
 
       toast.success("Login successful.");
-      if ([ROLE.ADMIN, ROLE.SUPPORT, ROLE.SUPERADMIN].includes(String(data.role || ""))) {
-        router.replace("/admin");
-      } else if (data.role === "client") {
-        router.replace("/client");
-      } else if (!data.isActivated) {
-        router.replace("/activate");
-      } else {
-        router.replace("/dashboard");
-      }
+      const targetPath = getPostLoginPath(data);
+      await confirmSessionAndRedirect(targetPath);
       return;
     }
     if (data?.mfaRequired && !data?.mfaSetupRequired) {
