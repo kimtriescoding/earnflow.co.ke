@@ -22,7 +22,9 @@ export async function POST(request) {
     const password = String(body.password || "");
     if (!identifier) return fail("Email or username is required", 400);
     const isEmailLike = identifier.includes("@");
-    const user = await User.findOne(isEmailLike ? { email: identifier } : { username: identifier });
+    const user = await User.findOne(isEmailLike ? { email: identifier } : { username: identifier }).select(
+      "username email role isActivated isBlocked passwordHash mfaEnabled mfaSecret mfaBackupCodeHashes mfaLastVerifiedAt mfaTempSecret mfaSetupOtpHash mfaSetupOtpExpiresAt mfaSetupOtpAttempts mfaSetupVerifiedAt"
+    );
     if (!user) return fail("Invalid credentials", 401);
     if (user.isBlocked) return fail("Account blocked", 403);
     const valid = await verifyPassword(password, user.passwordHash);

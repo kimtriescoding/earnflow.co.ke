@@ -24,6 +24,7 @@ function urlBase64ToUint8Array(base64String) {
 
 /** web-push `generate-vapid-keys` public key decodes to 65 bytes (uncompressed P-256). */
 const EXPECTED_VAPID_PUBLIC_KEY_BYTES = 65;
+const NOTIFICATION_POLL_MS = 45_000;
 
 function isLocalPushDevHostname() {
   if (typeof window === "undefined") return false;
@@ -145,7 +146,7 @@ export function UserNotificationsBell() {
     const t = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
       void fetchNotifications({ silent: true });
-    }, 22_000);
+    }, NOTIFICATION_POLL_MS);
     return () => window.clearInterval(t);
   }, [fetchNotifications]);
 

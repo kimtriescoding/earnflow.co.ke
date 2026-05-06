@@ -15,6 +15,7 @@ const schema = new mongoose.Schema(
   { timestamps: true }
 );
 schema.index({ beneficiaryUserId: 1, level: 1, createdAt: -1 });
+schema.index({ beneficiaryUserId: 1, createdAt: -1 });
 schema.index({ userId: 1, beneficiaryUserId: 1, level: 1 }, { unique: true });
 schema.index({ createdAt: -1 });
 

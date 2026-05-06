@@ -21,5 +21,6 @@ const schema = new mongoose.Schema(
   { timestamps: true }
 );
 schema.index({ userId: 1, source: 1, createdAt: -1 });
+schema.index({ userId: 1, status: 1, createdAt: -1 });
 
 export default getModel("EarningEvent", schema);

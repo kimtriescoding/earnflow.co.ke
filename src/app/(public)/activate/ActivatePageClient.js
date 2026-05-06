@@ -96,7 +96,7 @@ export default function ActivatePageClient() {
         if (cancelled) return;
         attempts += 1;
         try {
-          const meRes = await fetch("/api/auth/me", { credentials: "include" });
+          const meRes = await fetch("/api/auth/me?lite=1", { credentials: "include" });
           const meData = await meRes.json().catch(() => ({}));
           if (cancelled) return;
           if (meData?.success && meData.data?.isActivated) {
@@ -137,7 +137,7 @@ export default function ActivatePageClient() {
     (async () => {
       let leaving = false;
       try {
-        const meRes = await fetch("/api/auth/me", { credentials: "include" });
+        const meRes = await fetch("/api/auth/me?lite=1", { credentials: "include" });
         const meData = await meRes.json().catch(() => ({}));
         if (cancelled) return;
         if (!meData?.success) {

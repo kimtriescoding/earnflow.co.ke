@@ -18,6 +18,9 @@ import {
 } from "@/lib/modules/module-access";
 import { MATCH_TRANSACTION_REAL_FOR_REVENUE } from "@/lib/payments/transaction-real";
 import { toPublicEarningEventJSON } from "@/lib/ledger/earnings";
+import { createTtlCache } from "@/lib/cache/ttl-cache";
+
+const SUMMARY_CACHE = createTtlCache("dashboard-summary", 20_000);
 
 export async function GET() {
   const auth = await requireAuth(["user", "admin"]);
@@ -27,6 +30,8 @@ export async function GET() {
   const moduleAccess = normalizeModuleAccess(moduleStatusRaw);
 
   const userIdStr = String(auth.payload.sub);
+  const cached = SUMMARY_CACHE.get(userIdStr);
+  if (cached) return ok({ data: cached });
   const userObjectId = new mongoose.Types.ObjectId(userIdStr);
 
   const linkedReferralLedgerIds = await ReferralCommission.distinct("ledgerTransactionId", {
@@ -132,23 +137,23 @@ export async function GET() {
     : wallet;
   const eventsForClient = isEndUser ? events.map((e) => toPublicEarningEventJSON(e)) : events;
 
-  return ok({
-    data: {
-      wallet: walletForClient,
-      events: eventsForClient,
-      commissions,
-      referrals,
-      referralCode: user?.referralCode || "",
-      username: user?.username || "",
-      moduleTotals,
-      referralEarned,
-      pendingCounts,
-      withdrawals: {
-        totalAmount: withdrawals.totalAmount,
-        totalCount: withdrawals.totalCount,
-      },
-      todaysEarnings,
-      todaysEarningsTimeZone: DASHBOARD_EARNINGS_TIMEZONE,
+  const data = {
+    wallet: walletForClient,
+    events: eventsForClient,
+    commissions,
+    referrals,
+    referralCode: user?.referralCode || "",
+    username: user?.username || "",
+    moduleTotals,
+    referralEarned,
+    pendingCounts,
+    withdrawals: {
+      totalAmount: withdrawals.totalAmount,
+      totalCount: withdrawals.totalCount,
     },
-  });
+    todaysEarnings,
+    todaysEarningsTimeZone: DASHBOARD_EARNINGS_TIMEZONE,
+  };
+  SUMMARY_CACHE.set(userIdStr, data);
+  return ok({ data });
 }

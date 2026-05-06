@@ -6,12 +6,12 @@ import { ROLE } from "@/lib/auth/roles";
 const protectedUserRoutes = ["/dashboard", "/profile", "/activate"];
 const protectedAdminRoutes = ["/admin"];
 const protectedClientRoutes = ["/client"];
+const JWT_ACCESS_SECRET = new TextEncoder().encode(process.env.JWT_ACCESS_SECRET || "");
 
 async function verifyToken(token) {
   if (!token) return null;
   try {
-    const secret = new TextEncoder().encode(process.env.JWT_ACCESS_SECRET || "");
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, JWT_ACCESS_SECRET);
     return payload;
   } catch {
     return null;

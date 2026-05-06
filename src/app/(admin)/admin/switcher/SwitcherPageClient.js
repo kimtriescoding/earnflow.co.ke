@@ -6,7 +6,7 @@ import { adminNavItems } from "@/lib/nav/admin-nav";
 import { toast } from "sonner";
 import { BarChart3, CreditCard, Plane, Orbit, Loader2 } from "lucide-react";
 
-const POLL_MS = 3000;
+const POLL_MS = 12000;
 
 const DEFAULT_SWITCHES = { activation: true, aviatorTopup: true, luckySpinTopup: true };
 
@@ -49,7 +49,7 @@ export default function SwitcherPageClient() {
 
   const loadData = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
-    const res = await fetch("/api/admin/switcher", { cache: "no-store" });
+    const res = await fetch("/api/admin/switcher");
     const data = await res.json().catch(() => ({}));
     if (!data.success) {
       if (!silent) toast.error(data.message || "Unable to load switcher.");

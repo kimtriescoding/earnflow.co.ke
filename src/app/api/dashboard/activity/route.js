@@ -26,6 +26,8 @@ export async function GET(request) {
   const source = String(searchParams.get("source") || "").trim();
   const status = String(searchParams.get("status") || "").trim();
 
+  const boundedPage = Math.max(1, page);
+  const feedWindow = Math.min(220, Math.max(pageSize * boundedPage * 2, 80));
   const shouldIncludeNonEarnings = !source;
   const [events, commissions, transactions] = await Promise.all([
     EarningEvent.find({
@@ -34,13 +36,13 @@ export async function GET(request) {
       ...(status ? { status } : {}),
     })
       .sort({ createdAt: -1 })
-      .limit(500)
+      .limit(feedWindow)
       .lean(),
     shouldIncludeNonEarnings
-      ? ReferralCommission.find({ beneficiaryUserId: auth.payload.sub }).sort({ createdAt: -1 }).limit(100).lean()
+      ? ReferralCommission.find({ beneficiaryUserId: auth.payload.sub }).sort({ createdAt: -1 }).limit(feedWindow).lean()
       : Promise.resolve([]),
     shouldIncludeNonEarnings
-      ? Transaction.find({ userId: auth.payload.sub }).sort({ createdAt: -1 }).limit(100).lean()
+      ? Transaction.find({ userId: auth.payload.sub }).sort({ createdAt: -1 }).limit(feedWindow).lean()
       : Promise.resolve([]),
   ]);
 
@@ -92,7 +94,7 @@ export async function GET(request) {
     }),
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  const merged = mergedFull.slice((page - 1) * pageSize, page * pageSize);
+  const merged = mergedFull.slice((boundedPage - 1) * pageSize, boundedPage * pageSize);
 
-  return ok({ data: merged, total: mergedFull.length, page, pageSize });
+  return ok({ data: merged, total: mergedFull.length, page: boundedPage, pageSize });
 }

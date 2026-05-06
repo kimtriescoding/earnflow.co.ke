@@ -28,22 +28,28 @@ export async function POST(request) {
     if (String(exists.username || "").toLowerCase() === username) return fail("Username already taken", 409);
     return fail("Username or email already taken", 409);
   }
-  const hierarchy = await resolveReferralHierarchy(String(body.referralCode || "").trim().toLowerCase());
+  const referralCode = String(body.referralCode || "").trim().toLowerCase();
+  const [hierarchy, passwordHash] = await Promise.all([
+    resolveReferralHierarchy(referralCode),
+    hashPassword(password),
+  ]);
   const user = await User.create({
     username,
     referralCode: username,
     email,
     phoneNumber,
-    passwordHash: await hashPassword(password),
+    passwordHash,
     ...hierarchy,
   });
-  await Wallet.create({ userId: user._id });
-  await issueAuthSession({
-    sub: user._id.toString(),
-    role: user.role,
-    username: user.username,
-    isActivated: Boolean(user.isActivated),
-    mfa_verified: true,
-  });
+  await Promise.all([
+    Wallet.create({ userId: user._id }),
+    issueAuthSession({
+      sub: user._id.toString(),
+      role: user.role,
+      username: user.username,
+      isActivated: Boolean(user.isActivated),
+      mfa_verified: true,
+    }),
+  ]);
   return ok({ message: "Account created and logged in", role: user.role, isActivated: Boolean(user.isActivated) }, 201);
 }

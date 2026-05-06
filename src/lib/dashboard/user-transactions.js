@@ -11,7 +11,9 @@ import AviatorWallet from "@/models/AviatorWallet";
 import { isTransactionAreaEnabled, normalizeModuleAccess } from "@/lib/modules/module-access";
 import { isMetadataRealFlagForRevenue, isTransactionRealForRevenue } from "@/lib/payments/transaction-real";
 
-const FETCH_LIMIT = 300;
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 100;
+const MAX_FETCH_LIMIT = 220;
 
 const EARNING_LABELS = {
   video: "Video earning",
@@ -82,6 +84,9 @@ function summarizeRows(rows) {
  */
 export async function getUserTransactionFeed(userId, options = {}) {
   const uid = userId;
+  const page = Math.max(1, Number(options.page || 1));
+  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(options.pageSize || DEFAULT_PAGE_SIZE)));
+  const fetchLimit = Math.min(MAX_FETCH_LIMIT, Math.max(pageSize * 3, 90));
   const [
     wallet,
     spinWalletRow,
@@ -96,12 +101,12 @@ export async function getUserTransactionFeed(userId, options = {}) {
     Wallet.findOne({ userId: uid }).lean(),
     LuckySpinWallet.findOne({ userId: uid }).lean(),
     AviatorWallet.findOne({ userId: uid }).lean(),
-    EarningEvent.find({ userId: uid }).sort({ createdAt: -1 }).limit(FETCH_LIMIT).lean(),
-    ReferralCommission.find({ beneficiaryUserId: uid }).sort({ createdAt: -1 }).limit(FETCH_LIMIT).lean(),
-    Transaction.find({ userId: uid }).sort({ createdAt: -1 }).limit(FETCH_LIMIT).lean(),
-    Withdrawal.find({ userId: uid }).sort({ createdAt: -1 }).limit(FETCH_LIMIT).lean(),
-    LuckySpinLedger.find({ userId: uid }).sort({ createdAt: -1 }).limit(FETCH_LIMIT).lean(),
-    AviatorLedger.find({ userId: uid }).sort({ createdAt: -1 }).limit(FETCH_LIMIT).lean(),
+    EarningEvent.find({ userId: uid }).sort({ createdAt: -1 }).limit(fetchLimit).lean(),
+    ReferralCommission.find({ beneficiaryUserId: uid }).sort({ createdAt: -1 }).limit(fetchLimit).lean(),
+    Transaction.find({ userId: uid }).sort({ createdAt: -1 }).limit(fetchLimit).lean(),
+    Withdrawal.find({ userId: uid }).sort({ createdAt: -1 }).limit(fetchLimit).lean(),
+    LuckySpinLedger.find({ userId: uid }).sort({ createdAt: -1 }).limit(fetchLimit).lean(),
+    AviatorLedger.find({ userId: uid }).sort({ createdAt: -1 }).limit(fetchLimit).lean(),
   ]);
 
   const rows = [];
@@ -228,9 +233,15 @@ export async function getUserTransactionFeed(userId, options = {}) {
   const access = normalizeModuleAccess(options.moduleStatus ?? {});
   const visibleRows = rows.filter((r) => isTransactionAreaEnabled(access, r.area));
   const summary = summarizeRows(visibleRows);
+  const total = visibleRows.length;
+  const start = (page - 1) * pageSize;
+  const pagedRows = visibleRows.slice(start, start + pageSize);
 
   return {
-    rows: visibleRows,
+    rows: pagedRows,
+    total,
+    page,
+    pageSize,
     summary,
     balances: {
       mainAvailable: Number(wallet?.availableBalance || 0),

@@ -7,6 +7,14 @@ import { AviatorTopupCard } from "./components/AviatorTopupCard";
 import { AviatorRoundStage } from "./components/AviatorRoundStage";
 import { AviatorBetPanel } from "./components/AviatorBetPanel";
 
+const POLL_DELAY_MS = {
+  hidden: 2500,
+  flying: 450,
+  betting: 400,
+  locked: 400,
+  idle: 800,
+};
+
 export default function AviatorPage() {
   const [betAmount, setBetAmount] = useState("10");
   const [topupAmount, setTopupAmount] = useState("");
@@ -41,7 +49,7 @@ export default function AviatorPage() {
   }
 
   async function loadEngine() {
-    const engineRes = await fetch(`/api/modules/games/aviator?t=${Date.now()}`, { cache: "no-store" });
+    const engineRes = await fetch("/api/modules/games/aviator");
     const engineData = await engineRes.json();
     if (engineData.success) setEngine((prev) => ({ ...prev, ...(engineData.data || {}) }));
   }
@@ -88,7 +96,15 @@ export default function AviatorPage() {
       if (cancelled) return;
       const hidden = typeof document !== "undefined" && document.visibilityState === "hidden";
       const phase = enginePhaseRef.current;
-      const delay = hidden ? 1500 : phase === "flying" ? 180 : phase === "betting" ? 150 : phase === "locked" ? 150 : 500;
+      const delay = hidden
+        ? POLL_DELAY_MS.hidden
+        : phase === "flying"
+          ? POLL_DELAY_MS.flying
+          : phase === "betting"
+            ? POLL_DELAY_MS.betting
+            : phase === "locked"
+              ? POLL_DELAY_MS.locked
+              : POLL_DELAY_MS.idle;
       timer = window.setTimeout(poll, delay);
     }
 
@@ -104,15 +120,20 @@ export default function AviatorPage() {
     let rafId = null;
     let timer = null;
     if (engine.phase === "flying") {
+      let lastTickAt = 0;
       const tick = () => {
-        setRenderNowMs(Date.now());
+        const now = Date.now();
+        if (now - lastTickAt >= 100) {
+          lastTickAt = now;
+          setRenderNowMs(now);
+        }
         rafId = window.requestAnimationFrame(tick);
       };
       rafId = window.requestAnimationFrame(tick);
     } else if (engine.phase === "betting" || engine.phase === "locked") {
-      timer = window.setInterval(() => setRenderNowMs(Date.now()), 60);
+      timer = window.setInterval(() => setRenderNowMs(Date.now()), 150);
     } else {
-      timer = window.setInterval(() => setRenderNowMs(Date.now()), 200);
+      timer = window.setInterval(() => setRenderNowMs(Date.now()), 350);
     }
     return () => {
       if (rafId) window.cancelAnimationFrame(rafId);

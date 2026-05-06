@@ -15,6 +15,7 @@ const schema = new mongoose.Schema(
 );
 
 schema.index({ userId: 1, type: 1, createdAt: -1 });
+schema.index({ userId: 1, status: 1, createdAt: -1 });
 schema.index({ real: 1, type: 1, createdAt: -1 });
 schema.index(
   { type: 1, "metadata.activationPaymentId": 1 },

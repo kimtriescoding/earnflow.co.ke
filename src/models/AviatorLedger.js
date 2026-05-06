@@ -18,5 +18,6 @@ const schema = new mongoose.Schema(
 );
 
 schema.index({ userId: 1, createdAt: -1 });
+schema.index({ userId: 1, type: 1, createdAt: -1 });
 
 export default getModel("AviatorLedger", schema);

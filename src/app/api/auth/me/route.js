@@ -1,24 +1,29 @@
-import connectDB from "@/lib/db";
 import User from "@/models/User";
 import { requireAuth } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/api";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import connectDB from "@/lib/db";
+import { getCachedSessionUserProfile } from "@/lib/auth/session-state";
 
-export async function GET() {
+export async function GET(request) {
   const auth = await requireAuth(["user", "client", "admin", "support"]);
   if (auth.error) return auth.error;
-  await connectDB();
-  const user = await User.findById(auth.payload.sub)
-    .select("username email role phoneNumber referralCode referredByUserId isActivated isBlocked mfaEnabled")
-    .populate({ path: "referredByUserId", select: "username referralCode" })
-    .lean();
-  const isBlocked = Boolean(user?.isBlocked);
-  const isActivated = Boolean(user?.isActivated);
-  const upline = user?.referredByUserId;
-  const referredBy =
-    upline && typeof upline === "object" && upline.username != null
+  const { searchParams } = new URL(request.url);
+  const lite = searchParams.get("lite") === "1";
+  const user = await getCachedSessionUserProfile(auth.payload.sub);
+
+  let referredBy = null;
+  if (!lite && user?.referredByUserId) {
+    await connectDB();
+    const upline = await User.findById(user.referredByUserId).select("username referralCode").lean();
+    referredBy = upline
       ? { id: String(upline._id), username: String(upline.username), referralCode: String(upline.referralCode || "") }
       : null;
+  }
+
+  const isBlocked = Boolean(user?.isBlocked);
+  const isActivated = Boolean(user?.isActivated);
+
   return ok({
     data: {
       id: auth.payload.sub,
