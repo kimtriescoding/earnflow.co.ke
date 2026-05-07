@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -27,13 +27,6 @@ export default function LoginPageClient() {
     ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(otpAuthUrl)}`
     : "";
 
-  useEffect(() => {
-    router.prefetch("/dashboard");
-    router.prefetch("/activate");
-    router.prefetch("/client");
-    router.prefetch("/admin");
-  }, [router]);
-
   function getPostLoginPath(data) {
     if ([ROLE.ADMIN, ROLE.SUPPORT, ROLE.SUPERADMIN].includes(String(data?.role || ""))) return "/admin";
     if (data?.role === "client") return "/client";
@@ -42,7 +35,9 @@ export default function LoginPageClient() {
   }
 
   async function confirmSessionAndRedirect(targetPath) {
-    router.replace(targetPath);
+    // Force a fresh request after auth cookie write to avoid stale prefetched
+    // protected-route payloads that can keep users on the login view.
+    window.location.assign(targetPath);
   }
 
   async function fetchSetupSecret() {
