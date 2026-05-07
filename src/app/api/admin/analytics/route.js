@@ -71,7 +71,7 @@ export async function GET(request) {
   const dayKeys = enumerateInclusiveDays(fromYmd, toYmd);
   const { start, endExclusive } = rangeBoundsUtc(fromYmd, toYmd, TZ);
 
-  const [signupsAgg, activationAgg, commissionAgg, withdrawalAgg] = await Promise.all([
+  const [signupsAgg, activationAgg, commissionAgg, withdrawalAgg, allTimeActivationAgg, allTimeCommissionAgg, allTimeWithdrawalAgg] = await Promise.all([
     User.aggregate([
       { $match: { createdAt: { $gte: start, $lt: endExclusive }, role: { $in: ["user", "client"] } } },
       {
@@ -142,6 +142,31 @@ export async function GET(request) {
         },
       },
     ], aggOpts),
+    ActivationPayment.aggregate(
+      [
+        {
+          $match: {
+            status: "success",
+            ...MATCH_METADATA_REAL_FOR_REVENUE,
+          },
+        },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ],
+      aggOpts
+    ),
+    ReferralCommission.aggregate([{ $group: { _id: null, total: { $sum: "$amount" } } }], aggOpts),
+    Withdrawal.aggregate(
+      [
+        { $match: { status: "completed" } },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: { $add: [{ $ifNull: ["$amount", 0] }, { $ifNull: ["$fee", 0] }] } },
+          },
+        },
+      ],
+      aggOpts
+    ),
   ]);
 
   const signupMap = new Map(signupsAgg.map((r) => [r._id, r.c]));
@@ -177,6 +202,8 @@ export async function GET(request) {
   const totalCommissionsPaid = series.reduce((s, x) => s + x.commissions, 0);
   const totalWithdrawalsPaid = series.reduce((s, x) => s + x.withdrawals, 0);
   const totalOutflow = series.reduce((s, x) => s + x.outflow, 0);
+  const allTimeCashIn = Number(allTimeActivationAgg?.[0]?.total || 0);
+  const allTimeCashOut = Number(allTimeCommissionAgg?.[0]?.total || 0) + Number(allTimeWithdrawalAgg?.[0]?.total || 0);
 
   /** Pie: outflows only so slice % = share of money leaving (commissions vs withdrawals). */
   const sourceBreakdown = [
@@ -203,6 +230,9 @@ export async function GET(request) {
         totalOutflow: Number(totalOutflow.toFixed(2)),
         netFlow: Number((totalActivationRevenue - totalOutflow).toFixed(2)),
         netActivationsMinusCommissions: Number((totalActivationRevenue - totalCommissionsPaid).toFixed(2)),
+        allTimeCashIn: Number(allTimeCashIn.toFixed(2)),
+        allTimeCashOut: Number(allTimeCashOut.toFixed(2)),
+        allTimeNet: Number((allTimeCashIn - allTimeCashOut).toFixed(2)),
       },
     },
   });

@@ -71,7 +71,7 @@ export default function AdminPage() {
             (analyticsRes.data?.series || []).map((item) => ({
               label: item.label,
               inflow: Number(item.inflow ?? item.earnings ?? 0),
-              outflow: Number(item.outflow ?? item.payouts ?? 0),
+              outflow: Number(item.commissions ?? 0),
             }))
           );
         }
@@ -183,13 +183,13 @@ export default function AdminPage() {
       </div>
       <div className="card-surface neon-outline mt-6 rounded-[var(--radius-panel)] section-card">
         <h2 className="section-title">Financial flow overview</h2>
-        <p className="mt-1 text-sm muted-text">Last 14 days: activations vs commissions + withdrawals.</p>
+        <p className="mt-1 text-sm muted-text">Last 14 days: activations vs commissions.</p>
         <div className="mt-4">
           <FlowComparisonChart
             data={flowData}
-            title="14-day cash movement"
+            title="14-day activations vs commissions"
             moneyInLabel="Activations"
-            moneyOutLabel="Commissions + withdrawals"
+            moneyOutLabel="Commissions"
             chartSubtitle="Same calendar as admin stats"
           />
         </div>

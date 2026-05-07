@@ -17,6 +17,9 @@ const emptySummary = {
   totalWithdrawalsPaid: 0,
   totalOutflow: 0,
   netFlow: 0,
+  allTimeCashIn: 0,
+  allTimeCashOut: 0,
+  allTimeNet: 0,
 };
 
 const TZ = DASHBOARD_EARNINGS_TIMEZONE;
@@ -68,6 +71,9 @@ export default function AdminAnalyticsPage() {
         totalWithdrawalsPaid: Number(s.totalWithdrawalsPaid || 0),
         totalOutflow: Number(s.totalOutflow || 0),
         netFlow: Number(s.netFlow || 0),
+        allTimeCashIn: Number(s.allTimeCashIn || 0),
+        allTimeCashOut: Number(s.allTimeCashOut || 0),
+        allTimeNet: Number(s.allTimeNet || 0),
       });
     } catch {
       setError("Network error while loading analytics.");
@@ -93,14 +99,9 @@ export default function AdminAnalyticsPage() {
   };
 
   const lineSeries = series.map((x) => ({ label: x.label, value: Number(x.inflow ?? x.earnings ?? 0) }));
-  const flowSeries = series.map((x) => ({
-    label: x.label,
-    inflow: Number(x.inflow ?? x.earnings ?? 0),
-    outflow: Number(x.outflow ?? x.payouts ?? 0),
-  }));
-
   const rangeHint = `${rangeDays} calendar day${rangeDays === 1 ? "" : "s"}`;
   const statSuffix = ` (${rangeHint})`;
+  const allTimeFlowSeries = [{ label: "All time", inflow: summary.allTimeCashIn, outflow: summary.allTimeCashOut }];
 
   return (
     <AppShell title="Platform Analytics" navItems={adminNavItems}>
@@ -166,18 +167,25 @@ export default function AdminAnalyticsPage() {
           hint="Successful activation checkouts"
         />
         <StatCard
-          label={`Cash out${statSuffix}`}
-          value={`KES ${summary.totalOutflow.toFixed(2)}`}
+          label={`Commissions paid${statSuffix}`}
+          value={`KES ${summary.totalCommissionsPaid.toFixed(2)}`}
           tone="danger"
-          hint="Commissions + withdrawals (incl. fees)"
+          hint="Referral commissions posted"
         />
         <StatCard
-          label={`Net${statSuffix}`}
-          value={`KES ${summary.netFlow.toFixed(2)}`}
-          tone={summary.netFlow >= 0 ? "success" : "danger"}
-          hint="Activations minus cash out"
+          label={`Withdrawals paid${statSuffix}`}
+          value={`KES ${summary.totalWithdrawalsPaid.toFixed(2)}`}
+          tone="danger"
+          hint="Completed withdrawals (including fees)"
         />
       </div>
+      <FlowComparisonChart
+        data={allTimeFlowSeries}
+        title="All-time cash in vs cash out"
+        moneyInLabel="All-time cash in"
+        moneyOutLabel="All-time cash out"
+        chartSubtitle="Lifetime totals only (not affected by selected date range)"
+      />
       <div className="grid gap-3 xl:grid-cols-2">
         <EarningsSeriesChart
           data={lineSeries}
@@ -190,13 +198,6 @@ export default function AdminAnalyticsPage() {
           subtitle={`Commissions vs withdrawals — ${rangeHint}`}
         />
       </div>
-      <FlowComparisonChart
-        data={flowSeries}
-        title="Activations vs cash out"
-        moneyInLabel="Activations"
-        moneyOutLabel="Commissions + withdrawals"
-        chartSubtitle={fromYmd && toYmd ? `Each bar is one day (${fromYmd} → ${toYmd})` : "Each bar is one day in app time zone"}
-      />
     </AppShell>
   );
 }
