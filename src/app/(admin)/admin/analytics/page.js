@@ -5,7 +5,6 @@ import { AppShell } from "@/components/ui/AppShell";
 import { adminNavItems } from "@/lib/nav/admin-nav";
 import { EarningsSeriesChart } from "@/components/charts/EarningsSeriesChart";
 import { SourceBreakdownChart } from "@/components/charts/SourceBreakdownChart";
-import { FlowComparisonChart } from "@/components/charts/FlowComparisonChart";
 import { StatCard } from "@/components/ui/StatCard";
 import { DASHBOARD_EARNINGS_TIMEZONE } from "@/lib/config/dashboard-timezone";
 import { defaultRollingRangeYmd } from "@/lib/datetime/zoned-range";
@@ -17,9 +16,6 @@ const emptySummary = {
   totalWithdrawalsPaid: 0,
   totalOutflow: 0,
   netFlow: 0,
-  allTimeCashIn: 0,
-  allTimeCashOut: 0,
-  allTimeNet: 0,
 };
 
 const TZ = DASHBOARD_EARNINGS_TIMEZONE;
@@ -71,9 +67,6 @@ export default function AdminAnalyticsPage() {
         totalWithdrawalsPaid: Number(s.totalWithdrawalsPaid || 0),
         totalOutflow: Number(s.totalOutflow || 0),
         netFlow: Number(s.netFlow || 0),
-        allTimeCashIn: Number(s.allTimeCashIn || 0),
-        allTimeCashOut: Number(s.allTimeCashOut || 0),
-        allTimeNet: Number(s.allTimeNet || 0),
       });
     } catch {
       setError("Network error while loading analytics.");
@@ -101,7 +94,6 @@ export default function AdminAnalyticsPage() {
   const lineSeries = series.map((x) => ({ label: x.label, value: Number(x.inflow ?? x.earnings ?? 0) }));
   const rangeHint = `${rangeDays} calendar day${rangeDays === 1 ? "" : "s"}`;
   const statSuffix = ` (${rangeHint})`;
-  const allTimeFlowSeries = [{ label: "All time", inflow: summary.allTimeCashIn, outflow: summary.allTimeCashOut }];
 
   return (
     <AppShell title="Platform Analytics" navItems={adminNavItems}>
@@ -179,13 +171,6 @@ export default function AdminAnalyticsPage() {
           hint="Completed withdrawals (including fees)"
         />
       </div>
-      <FlowComparisonChart
-        data={allTimeFlowSeries}
-        title="All-time cash in vs cash out"
-        moneyInLabel="All-time cash in"
-        moneyOutLabel="All-time cash out"
-        chartSubtitle="Lifetime totals only (not affected by selected date range)"
-      />
       <div className="grid gap-3 xl:grid-cols-2">
         <EarningsSeriesChart
           data={lineSeries}
