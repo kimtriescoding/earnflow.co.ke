@@ -8,12 +8,32 @@ export async function issueAuthSession(payload, metadata = {}) {
   await connectDB();
   const jti = createRefreshJti();
   const expiresAt = new Date(Date.now() + REFRESH_MAX_AGE_SEC * 1000);
-  await RefreshSession.create({
+  const created = await RefreshSession.create({
     userId: payload.sub,
     jti,
     expiresAt,
     metadata,
   });
+  if (metadata?.source === "login") {
+    const keepIds = await RefreshSession.find({
+      userId: payload.sub,
+      "metadata.source": "login",
+    })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .select("_id")
+      .lean();
+
+    if (keepIds.length >= 5) {
+      const keepIdSet = new Set(keepIds.map((doc) => String(doc._id)));
+      keepIdSet.add(String(created._id));
+      await RefreshSession.deleteMany({
+        userId: payload.sub,
+        "metadata.source": "login",
+        _id: { $nin: [...keepIdSet] },
+      });
+    }
+  }
   await setAuthCookies({ ...payload, jti });
 }
 
