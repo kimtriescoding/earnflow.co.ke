@@ -65,6 +65,7 @@ export default function AdminUsersPage() {
   const router = useRouter();
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState({ activated: 0, elevatedRoleCount: 0, totalWithdrawableKes: 0, minWithdrawalAmount: 0 });
   const [topLifetimeEarners, setTopLifetimeEarners] = useState([]);
   const [topWithdrawable, setTopWithdrawable] = useState([]);
@@ -89,6 +90,7 @@ export default function AdminUsersPage() {
   }, [page, pageSize, search, sortState, activation, withdrawableOnly]);
 
   useEffect(() => {
+    setLoading(true);
     fetch(`/api/admin/users?${query.toString()}`)
       .then((res) => res.json())
       .then((data) => {
@@ -100,7 +102,9 @@ export default function AdminUsersPage() {
           totalWithdrawableKes: Number(data.summary?.totalWithdrawableKes || 0),
           minWithdrawalAmount: Number(data.summary?.minWithdrawalAmount ?? 0),
         });
-      });
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [query]);
 
   useEffect(() => {
@@ -293,6 +297,7 @@ export default function AdminUsersPage() {
           }}
           onSortChange={setSortState}
           onPageChange={setPage}
+          loading={loading}
         />
       </div>
     </AppShell>

@@ -3,6 +3,9 @@
 import { useMemo, useState } from "react";
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { LayoutGrid, Table } from "lucide-react";
+import { Skeleton } from "@/components/ui/Skeleton";
+
+const SKELETON_ROW_COUNT = 6;
 
 export function AdvancedTable({
   columns,
@@ -15,11 +18,12 @@ export function AdvancedTable({
   onSortChange,
   sortState,
   onPageChange,
-  loading = false,
+  loading,
   emptyLabel = "No records found.",
   title = "Records",
   showMobileLayoutToggle = true,
 }) {
+  const isLoading = loading === undefined ? rows == null : Boolean(loading);
   const totalPages = useMemo(() => Math.max(1, Math.ceil((total || 0) / pageSize)), [total, pageSize]);
   const [value, setValue] = useState(search || "");
   const [mobileLayout, setMobileLayout] = useState("cards");
@@ -72,7 +76,16 @@ export function AdvancedTable({
         <div className="flex items-start justify-between gap-3 md:block">
           <div className="min-w-0">
             <h2 className="section-title">{title}</h2>
-            <p className="text-sm muted-text">{total} records</p>
+            <p className="flex items-center gap-2 text-sm muted-text">
+              <span>{isLoading ? "—" : total} records</span>
+              {isLoading ? (
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-[color-mix(in_srgb,var(--brand)_60%,transparent)] border-t-transparent"
+                />
+              ) : null}
+              {isLoading ? <span className="sr-only">Loading...</span> : null}
+            </p>
           </div>
           {showMobileLayoutToggle ? (
             <div
@@ -129,8 +142,33 @@ export function AdvancedTable({
       </div>
 
       <div className={`grid gap-3 md:hidden ${showCardsOnMobile ? "" : "hidden"}`}>
-        {loading ? (
-          <div className="rounded-2xl border bg-[var(--surface)] px-3 py-6 text-center text-sm muted-text">Loading...</div>
+        {isLoading ? (
+          Array.from({ length: SKELETON_ROW_COUNT }).map((_, idx) => (
+            <article
+              key={`skeleton-card-${idx}`}
+              aria-hidden="true"
+              className="rounded-2xl border bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-3 py-3"
+            >
+              <div className="space-y-2">
+                {dataColumns.map((column) => (
+                  <div
+                    key={column.field}
+                    className="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-2 last:border-b-0 last:pb-0"
+                  >
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                ))}
+              </div>
+              {actionColumns.length ? (
+                <footer className="mt-3 border-t border-[var(--border)] pt-3">
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Skeleton className="h-8 w-20" />
+                  </div>
+                </footer>
+              ) : null}
+            </article>
+          ))
         ) : (rows || []).length ? (
           (rows || []).map((row, idx) => (
             <article key={row.id || row._id || idx} className="rounded-2xl border bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-3 py-3">
@@ -180,12 +218,30 @@ export function AdvancedTable({
             ))}
           </thead>
           <tbody className="bg-[color-mix(in_srgb,var(--surface)_96%,transparent)]">
-            {loading ? (
-              <tr>
-                <td colSpan={columns.length} className="px-3 py-6 text-center text-sm muted-text">
-                  Loading...
-                </td>
-              </tr>
+            {isLoading ? (
+              Array.from({ length: SKELETON_ROW_COUNT }).map((_, rowIdx) => (
+                <tr
+                  key={`skeleton-row-${rowIdx}`}
+                  aria-hidden="true"
+                  className="border-b border-[var(--border)] last:border-0"
+                >
+                  {columns.map((column, colIdx) => (
+                    <td key={`skeleton-cell-${rowIdx}-${column.field || colIdx}`} className="px-3 py-3.5">
+                      <Skeleton
+                        className={`h-3 ${
+                          column.field === "actions"
+                            ? "w-16"
+                            : colIdx === 0
+                              ? "w-32"
+                              : colIdx % 3 === 0
+                                ? "w-20"
+                                : "w-24"
+                        }`}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))
             ) : table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
                 <tr key={row.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[linear-gradient(90deg,color-mix(in_srgb,var(--brand)_14%,transparent),color-mix(in_srgb,var(--accent)_10%,transparent))]">
@@ -214,14 +270,14 @@ export function AdvancedTable({
         <div className="flex gap-2">
           <button
             className="secondary-btn px-3.5 py-2 text-xs disabled:opacity-40"
-            disabled={page <= 1}
+            disabled={isLoading || page <= 1}
             onClick={() => onPageChange?.(page - 1)}
           >
             Prev
           </button>
           <button
             className="secondary-btn px-3.5 py-2 text-xs disabled:opacity-40"
-            disabled={page >= totalPages}
+            disabled={isLoading || page >= totalPages}
             onClick={() => onPageChange?.(page + 1)}
           >
             Next

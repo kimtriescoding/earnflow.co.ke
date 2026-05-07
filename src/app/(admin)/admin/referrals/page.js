@@ -14,9 +14,11 @@ export default function AdminReferralsPage() {
   const [search, setSearch] = useState("");
   const [commissionFixIdentifier, setCommissionFixIdentifier] = useState("");
   const [commissionFixLoading, setCommissionFixLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const pageSize = 20;
 
   useEffect(() => {
+    setLoading(true);
     fetch(`/api/admin/referrals?page=${page}&pageSize=${pageSize}&search=${encodeURIComponent(search)}`)
       .then((res) => res.json())
       .then((data) => {
@@ -31,7 +33,8 @@ export default function AdminReferralsPage() {
           totalCommissions: Number(data.summary?.totalCommissions || 0),
         });
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [page, search]);
 
   const columns = [
@@ -142,6 +145,7 @@ export default function AdminReferralsPage() {
         onSortChange={() => {}}
         onPageChange={setPage}
         emptyLabel="No referral records found."
+        loading={loading}
       />
     </AppShell>
   );

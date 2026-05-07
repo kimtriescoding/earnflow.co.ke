@@ -9,9 +9,11 @@ export default function WithdrawalsHistoryPage() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
   const pageSize = 20;
 
   useEffect(() => {
+    setLoading(true);
     fetch(`/api/dashboard/withdrawals?page=${page}&pageSize=${pageSize}`)
       .then((res) => res.json())
       .then((data) => {
@@ -19,7 +21,8 @@ export default function WithdrawalsHistoryPage() {
         setRows((data.data || []).map((item) => ({ ...item, id: item._id })));
         setTotal(data.total || 0);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [page]);
 
   const columns = [
@@ -54,6 +57,7 @@ export default function WithdrawalsHistoryPage() {
         onSortChange={() => {}}
         onPageChange={setPage}
         emptyLabel="No withdrawals yet."
+        loading={loading}
       />
     </UserAppShell>
   );

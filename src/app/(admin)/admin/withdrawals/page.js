@@ -13,9 +13,11 @@ export default function AdminWithdrawalsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [loading, setLoading] = useState(true);
   const pageSize = 20;
 
   const loadData = () => {
+    setLoading(true);
     fetch(`/api/admin/withdrawals?page=${page}&pageSize=${pageSize}&status=${status}`)
       .then((res) => res.json())
       .then((data) => {
@@ -32,7 +34,8 @@ export default function AdminWithdrawalsPage() {
         setRows(filtered.map((item) => ({ ...item, id: item._id })));
         setTotal(data.total || 0);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => {
@@ -137,6 +140,7 @@ export default function AdminWithdrawalsPage() {
         onSortChange={() => {}}
         onPageChange={setPage}
         emptyLabel="No withdrawals found."
+        loading={loading}
       />
     </AppShell>
   );
