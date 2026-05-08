@@ -127,7 +127,7 @@ export async function POST(request) {
             },
           },
         },
-        { new: true }
+        { returnDocument: "after" }
       );
 
       if (!transitioned) {
@@ -143,7 +143,7 @@ export async function POST(request) {
               availableBalance: -totalDeduction,
             },
           },
-          { new: true, upsert: true, setDefaultsOnInsert: true }
+          { returnDocument: "after", upsert: true, setDefaultsOnInsert: true }
         );
       } else {
         wallet = await Wallet.findOne({ userId: withdrawal.userId }).lean();
@@ -216,7 +216,7 @@ export async function POST(request) {
               : {}),
           },
         },
-        { new: true }
+        { returnDocument: "after" }
       );
       const didProcessFailure = Boolean(failedWithdrawal);
       if (didProcessFailure && shouldRefund) {
@@ -227,7 +227,7 @@ export async function POST(request) {
               availableBalance: totalDeduction,
             },
           },
-          { new: true, upsert: true, setDefaultsOnInsert: true }
+          { returnDocument: "after", upsert: true, setDefaultsOnInsert: true }
         );
         await User.findByIdAndUpdate(withdrawal.userId, { $set: { balance: Number(wallet?.availableBalance || 0) } });
         try {

@@ -81,7 +81,7 @@ export async function POST(request) {
   const wallet = await Wallet.findOneAndUpdate(
     { userId: auth.payload.sub, availableBalance: { $gte: totalDeduction } },
     { $inc: { availableBalance: -totalDeduction } },
-    { new: true }
+    { returnDocument: "after" }
   );
   if (!wallet) return fail("Insufficient withdrawable balance");
   await User.findByIdAndUpdate(auth.payload.sub, { $set: { balance: Number(wallet.availableBalance || 0) } });
@@ -107,7 +107,7 @@ export async function POST(request) {
     const rolledBackWallet = await Wallet.findOneAndUpdate(
       { userId: auth.payload.sub },
       { $inc: { availableBalance: totalDeduction } },
-      { new: true }
+      { returnDocument: "after" }
     );
     await User.findByIdAndUpdate(auth.payload.sub, { $set: { balance: Number(rolledBackWallet?.availableBalance || 0) } });
     if (e?.code === 11000) {
@@ -120,7 +120,7 @@ export async function POST(request) {
     const rolledBackWallet = await Wallet.findOneAndUpdate(
       { userId: auth.payload.sub },
       { $inc: { availableBalance: totalDeduction } },
-      { new: true }
+      { returnDocument: "after" }
     );
     await User.findByIdAndUpdate(auth.payload.sub, { $set: { balance: Number(rolledBackWallet?.availableBalance || 0) } });
     await Withdrawal.findByIdAndUpdate(withdrawal._id, {
@@ -148,7 +148,7 @@ export async function POST(request) {
     const rolledBackWallet = await Wallet.findOneAndUpdate(
       { userId: auth.payload.sub },
       { $inc: { availableBalance: totalDeduction } },
-      { new: true }
+      { returnDocument: "after" }
     );
     await User.findByIdAndUpdate(auth.payload.sub, { $set: { balance: Number(rolledBackWallet?.availableBalance || 0) } });
     await Withdrawal.findByIdAndUpdate(withdrawal._id, {

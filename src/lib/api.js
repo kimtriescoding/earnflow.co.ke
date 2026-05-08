@@ -44,7 +44,7 @@ export async function blockIpNow({ request, reason, evidence = {}, ipOverride = 
     await BlockedIp.findOneAndUpdate(
       { ip },
       { ip, reason, evidence, active: true, blockedAt: new Date(), blockedBy: "system" },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
     );
     setIpBlockedInMemory(ip);
     return { blocked: true, ip };

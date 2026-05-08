@@ -56,7 +56,7 @@ export async function POST(request) {
               metadata: { ...payment, real: isMetadataRealFlagForRevenue(topup?.metadata) },
             },
           },
-          { new: true }
+          { returnDocument: "after" }
         );
         if (updated) {
           await creditLuckySpinWallet({

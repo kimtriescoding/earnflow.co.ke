@@ -249,7 +249,7 @@ export async function grantReferralSignupBonuses(newUser, context = {}) {
     const sessionOpts = session ? { session } : null;
     const walletUpdateOpts = {
       upsert: true,
-      new: true,
+      returnDocument: "after",
       setDefaultsOnInsert: true,
       ...(sessionOpts || {}),
     };

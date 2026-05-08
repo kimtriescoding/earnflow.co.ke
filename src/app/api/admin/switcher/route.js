@@ -65,17 +65,17 @@ export async function POST(request) {
     Settings.findOneAndUpdate(
       { key: REALITY_SWITCH_KEYS.activation },
       { key: REALITY_SWITCH_KEYS.activation, value: next.activation },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
     ),
     Settings.findOneAndUpdate(
       { key: REALITY_SWITCH_KEYS.aviatorTopup },
       { key: REALITY_SWITCH_KEYS.aviatorTopup, value: next.aviatorTopup },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
     ),
     Settings.findOneAndUpdate(
       { key: REALITY_SWITCH_KEYS.luckySpinTopup },
       { key: REALITY_SWITCH_KEYS.luckySpinTopup, value: next.luckySpinTopup },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
     ),
   ]);
   invalidatePaymentRealSwitchCache();

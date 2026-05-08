@@ -124,7 +124,7 @@ export async function handleActivationCallbackPipeline({
       reference: activation.reference,
     },
     { $set: { status: "success", metadata: { ...payment, real: isMetadataRealFlagForRevenue(activation?.metadata) } } },
-    { new: true }
+    { returnDocument: "after" }
   );
 
   const idem = `activation_referral:${activation._id}`;

@@ -89,12 +89,12 @@ export async function POST(request, { params }) {
     Settings.findOneAndUpdate(
       { key: "module_status" },
       { key: "module_status", value: mergedStatus },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
     ),
     Settings.findOneAndUpdate(
       { key: moduleSettingsKey(slug) },
       { key: moduleSettingsKey(slug), value: normalizedConfig },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
     ),
   ]);
   return ok({ message: "Module settings updated" });

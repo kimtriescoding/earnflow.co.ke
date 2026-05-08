@@ -4,7 +4,11 @@ import LuckySpinLedger from "@/models/LuckySpinLedger";
 
 export async function getOrCreateLuckySpinWallet(userId) {
   await connectDB();
-  return LuckySpinWallet.findOneAndUpdate({ userId }, { $setOnInsert: { userId } }, { upsert: true, new: true, setDefaultsOnInsert: true });
+  return LuckySpinWallet.findOneAndUpdate(
+    { userId },
+    { $setOnInsert: { userId } },
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
+  );
 }
 
 export async function creditLuckySpinWallet({ userId, amount, type, metadata = {} }) {
@@ -21,7 +25,7 @@ export async function creditLuckySpinWallet({ userId, amount, type, metadata = {
         totalPayouts: payoutInc,
       },
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
   );
 
   await LuckySpinLedger.create({
@@ -49,7 +53,7 @@ export async function debitLuckySpinWallet({ userId, amount, type, metadata = {}
         totalWagered: wagerInc,
       },
     },
-    { new: true }
+    { returnDocument: "after" }
   );
   if (!wallet) {
     const w = await LuckySpinWallet.findOne({ userId }).lean();

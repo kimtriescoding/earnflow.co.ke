@@ -42,7 +42,7 @@ export async function POST(request) {
       auth: parsed.data.keys.auth,
       userAgent: ua.slice(0, 512),
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
   );
 
   return ok({ data: { ok: true } });

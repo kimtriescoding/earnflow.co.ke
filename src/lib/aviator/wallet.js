@@ -4,7 +4,11 @@ import AviatorLedger from "@/models/AviatorLedger";
 
 export async function getOrCreateAviatorWallet(userId) {
   await connectDB();
-  return AviatorWallet.findOneAndUpdate({ userId }, { $setOnInsert: { userId } }, { upsert: true, new: true, setDefaultsOnInsert: true });
+  return AviatorWallet.findOneAndUpdate(
+    { userId },
+    { $setOnInsert: { userId } },
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
+  );
 }
 
 export async function creditAviatorWallet({ userId, amount, type, metadata = {} }) {
@@ -21,7 +25,7 @@ export async function creditAviatorWallet({ userId, amount, type, metadata = {} 
         totalPayouts: payoutInc,
       },
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
   );
 
   await AviatorLedger.create({
@@ -49,7 +53,7 @@ export async function debitAviatorWallet({ userId, amount, type, metadata = {} }
         totalWagered: wagerInc,
       },
     },
-    { new: true }
+    { returnDocument: "after" }
   );
   if (!wallet) {
     const w = await AviatorWallet.findOne({ userId }).lean();

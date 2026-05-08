@@ -99,7 +99,7 @@ export async function POST(request) {
   const entries = Object.entries(body);
   await Promise.all(
     entries.map(([key, value]) =>
-      Settings.findOneAndUpdate({ key }, { key, value }, { upsert: true, new: true, setDefaultsOnInsert: true })
+      Settings.findOneAndUpdate({ key }, { key, value }, { upsert: true, returnDocument: "after", setDefaultsOnInsert: true })
     )
   );
   if (body.module_status) {

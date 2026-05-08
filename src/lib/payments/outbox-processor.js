@@ -107,7 +107,7 @@ export async function processOutboxJobByKey(idempotencyKey) {
       $set: { status: "processing", lockedAt: now },
       $inc: { attempts: 1 },
     },
-    { new: true }
+    { returnDocument: "after" }
   );
 
   if (!job) {

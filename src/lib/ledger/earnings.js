@@ -18,14 +18,14 @@ async function persistApprovedEarning(event, user, actorId, session) {
     await Wallet.findOneAndUpdate(
       { userId: user._id },
       { $inc: { pendingBalance: -event.amount, availableBalance: event.amount, lifetimeEarnings: event.amount } },
-      { ...opts, upsert: true, new: true, setDefaultsOnInsert: true }
+      { ...opts, upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
     );
     await User.findByIdAndUpdate(user._id, { $inc: { balance: event.amount } }, opts);
   } else {
     await Wallet.findOneAndUpdate(
       { userId: user._id },
       { $inc: { pendingBalance: -event.amount, heldMainBalance: event.amount, lifetimeEarnings: event.amount } },
-      { ...opts, upsert: true, new: true, setDefaultsOnInsert: true }
+      { ...opts, upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
     );
   }
 }

@@ -27,7 +27,11 @@ export async function PATCH(request, { params }) {
     updates.pricingSnapshot = body.pricingSnapshot && typeof body.pricingSnapshot === "object" ? body.pricingSnapshot : null;
   if (body.metadata !== undefined) updates.metadata = body.metadata && typeof body.metadata === "object" ? body.metadata : {};
 
-  const row = await ModuleItem.findOneAndUpdate({ _id: itemId, module: toModuleType(slug) }, updates, { new: true }).lean();
+  const row = await ModuleItem.findOneAndUpdate(
+    { _id: itemId, module: toModuleType(slug) },
+    updates,
+    { returnDocument: "after" }
+  ).lean();
   if (!row) return fail("Item not found", 404);
   return ok({ data: row });
 }
