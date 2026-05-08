@@ -16,8 +16,8 @@ function isLikelyObjectIdString(value) {
 }
 
 /**
- * Re-applies referral signup bonuses for an activated user (per-level idempotency), then reconciles
- * each upline in their chain so related accounts pick up any missing lines without double credits.
+ * Re-applies referral signup bonuses for an activated user (per-level idempotency).
+ * Optional `fullReconcile` also re-checks related accounts under each upline (slower).
  */
 export async function POST(request) {
   const auth = await requireAuth(["admin"]);
@@ -35,10 +35,22 @@ export async function POST(request) {
   }
   if (!user) return fail("User not found", 404);
   if (!user.isActivated) return fail("User must be activated", 400);
+  const fullReconcile = Boolean(body.fullReconcile);
   await grantReferralSignupBonuses(user, {
     verifiedActivation: true,
     activationPaymentId: `admin_sync:${String(user._id)}:${Date.now()}`,
   });
+  if (!fullReconcile) {
+    return ok({
+      data: {
+        mode: "activated_user_only",
+        userId: String(user._id),
+        username: user.username || "",
+      },
+      message: "Missing signup bonuses applied for this account.",
+    });
+  }
+
   const uplineIds = uniqueUplineBeneficiaryIds(user);
   const reconciles = [];
   let reconciledAccounts = 0;
