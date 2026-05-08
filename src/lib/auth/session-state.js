@@ -5,6 +5,13 @@ import { createTtlCache } from "@/lib/cache/ttl-cache";
 const USER_STATE_CACHE = createTtlCache("session-user-state", 60_000);
 const USER_PROFILE_CACHE = createTtlCache("session-user-profile", 60_000);
 
+export function invalidateSessionUserCaches(userId) {
+  const key = String(userId || "");
+  if (!key) return;
+  USER_STATE_CACHE.delete(key);
+  USER_PROFILE_CACHE.delete(key);
+}
+
 export async function getCachedSessionUserState(userId) {
   const key = String(userId || "");
   if (!key) return null;

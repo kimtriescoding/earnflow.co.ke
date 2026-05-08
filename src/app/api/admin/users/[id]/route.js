@@ -9,6 +9,7 @@ import { ok, fail } from "@/lib/api";
 import Withdrawal from "@/models/Withdrawal";
 import { hashPassword } from "@/lib/auth/password";
 import { ADMIN_MANAGEABLE_ROLES, INTERNAL_ONLY_ROLES, isSuperadminRole } from "@/lib/auth/roles";
+import { invalidateSessionUserCaches } from "@/lib/auth/session-state";
 
 function sanitizeTransactionLikeRow(row) {
   const next = { ...row };
@@ -134,6 +135,7 @@ export async function PATCH(request, { params }) {
     updates.passwordHash = await hashPassword(password);
   }
   await User.findByIdAndUpdate(userId, updates);
+  invalidateSessionUserCaches(userId);
   return ok({ message: "User updated" });
 }
 

@@ -8,6 +8,7 @@ import { createMfaBootstrapOtp } from "@/lib/auth/mfa-bootstrap";
 import { sendMfaSetupOtpEmail } from "@/lib/email-utils";
 import { logError } from "@/lib/observability/logger";
 import { isElevatedRole } from "@/lib/auth/roles";
+import { invalidateSessionUserCaches } from "@/lib/auth/session-state";
 
 export async function POST(request) {
   try {
@@ -74,6 +75,7 @@ export async function POST(request) {
         otpEmailSent = Boolean(sendResult?.sent);
       }
     }
+    invalidateSessionUserCaches(user._id);
     await issueAuthSession(
       {
         sub: user._id.toString(),
