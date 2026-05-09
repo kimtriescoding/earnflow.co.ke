@@ -19,8 +19,15 @@ function getVideoEmbedSrc(url) {
     if (host === "youtube.com" || host.endsWith(".youtube.com")) {
       const v = u.searchParams.get("v");
       if (v) return `https://www.youtube.com/embed/${v}`;
-      const m = u.pathname.match(/\/embed\/([^/?]+)/);
-      if (m) return `https://www.youtube.com/embed/${m[1]}`;
+      // Shorts and Live URLs are not embeddable directly (YouTube sets
+      // X-Frame-Options: SAMEORIGIN on /shorts and /live), but the underlying
+      // video id works fine on /embed/.
+      const shorts = u.pathname.match(/\/shorts\/([^/?]+)/);
+      if (shorts) return `https://www.youtube.com/embed/${shorts[1]}`;
+      const live = u.pathname.match(/\/live\/([^/?]+)/);
+      if (live) return `https://www.youtube.com/embed/${live[1]}`;
+      const embed = u.pathname.match(/\/embed\/([^/?]+)/);
+      if (embed) return `https://www.youtube.com/embed/${embed[1]}`;
     }
     if (host.includes("vimeo.com")) {
       const m = u.pathname.match(/\/(\d+)/);
