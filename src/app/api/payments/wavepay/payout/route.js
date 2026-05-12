@@ -101,6 +101,7 @@ export async function POST(request) {
         totalDeduction,
         balanceReserved: true,
         balanceReservedAt: new Date(),
+        walletAvailableBefore: available,
       },
     });
   } catch (e) {

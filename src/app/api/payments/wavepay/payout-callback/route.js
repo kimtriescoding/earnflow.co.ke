@@ -5,6 +5,7 @@ import Withdrawal from "@/models/Withdrawal";
 import User from "@/models/User";
 import Wallet from "@/models/Wallet";
 import Transaction from "@/models/Transaction";
+import { creditWithdrawalRefundIfAbsent } from "@/lib/payments/withdrawal-refund";
 import { getZetupayCredentials } from "@/models/Settings";
 import { isTrustedCallback } from "@/lib/payments/callback-security";
 import { ensureOutboxJob } from "@/lib/payments/outbox-enqueue";
@@ -94,7 +95,22 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "Invalid secret" }, { status: 401 });
     }
 
-    if (withdrawal.status === "completed" || withdrawal.status === "failed") {
+    if (withdrawal.status === "completed") {
+      return NextResponse.json({ success: true, message: "Withdrawal already processed" }, { status: 200 });
+    }
+
+    if (withdrawal.status === "failed") {
+      const fresh = await Withdrawal.findById(withdrawal._id).lean();
+      const r = await creditWithdrawalRefundIfAbsent(fresh || withdrawal, {
+        referenceNumber,
+        payoutID,
+        rawStatus,
+        statusNorm,
+        source: "wavepay_payout_callback_recovery",
+      });
+      if (r.didApply && !r.alreadyRecorded) {
+        logInfo("payout.callback_refund_recovered", { withdrawalId: String(withdrawal._id) });
+      }
       return NextResponse.json({ success: true, message: "Withdrawal already processed" }, { status: 200 });
     }
 
@@ -192,12 +208,6 @@ export async function POST(request) {
         withdrawalId: String(withdrawal._id),
         status: rawStatus || statusNorm || "(empty)",
       });
-      const totalDeduction = Number(withdrawal.amount || 0) + Number(withdrawal.fee || 0);
-      const wasReserved = Boolean(withdrawal?.metadata?.balanceReserved);
-      const hasReservationHint =
-        withdrawal?.metadata?.totalDeduction !== undefined || withdrawal?.metadata?.balanceReservedAt !== undefined;
-      const alreadyRefunded = Boolean(withdrawal?.metadata?.balanceRefunded);
-      const shouldRefund = !alreadyRefunded && (wasReserved || hasReservationHint);
       const callbackProcessedAt = new Date();
       const failedWithdrawal = await Withdrawal.findOneAndUpdate(
         { _id: withdrawal._id, status: { $nin: ["completed", "failed"] } },
@@ -208,45 +218,19 @@ export async function POST(request) {
             processedAt: callbackProcessedAt,
             "metadata.lastCallbackStatus": rawStatus || statusNorm,
             "metadata.lastCallbackAt": callbackProcessedAt,
-            ...(shouldRefund
-              ? {
-                  "metadata.balanceRefunded": true,
-                  "metadata.balanceRefundedAt": callbackProcessedAt,
-                }
-              : {}),
           },
         },
         { returnDocument: "after" }
       );
       const didProcessFailure = Boolean(failedWithdrawal);
-      if (didProcessFailure && shouldRefund) {
-        const wallet = await Wallet.findOneAndUpdate(
-          { userId: withdrawal.userId },
-          {
-            $inc: {
-              availableBalance: totalDeduction,
-            },
-          },
-          { returnDocument: "after", upsert: true, setDefaultsOnInsert: true }
-        );
-        await User.findByIdAndUpdate(withdrawal.userId, { $set: { balance: Number(wallet?.availableBalance || 0) } });
-        try {
-          await Transaction.create({
-            userId: withdrawal.userId,
-            type: "refund",
-            amount: totalDeduction,
-            description: "Withdrawal refund",
-            status: "completed",
-            metadata: {
-              withdrawalId: withdrawal._id,
-              referenceNumber: referenceNumber || payoutID,
-              source: "wavepay_payout_callback",
-              callbackStatus: rawStatus || statusNorm,
-            },
-          });
-        } catch (e) {
-          if (e?.code !== 11000) throw e;
-        }
+      if (didProcessFailure) {
+        await creditWithdrawalRefundIfAbsent(failedWithdrawal, {
+          referenceNumber,
+          payoutID,
+          rawStatus,
+          statusNorm,
+          source: "wavepay_payout_callback",
+        });
       }
       if (didProcessFailure) {
         const ref = String(referenceNumber || payoutID || "");

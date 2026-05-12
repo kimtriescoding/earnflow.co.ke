@@ -12,6 +12,7 @@ import { getEnv } from "./env";
  * - maxPoolSize / minPoolSize — may tune pool via URI instead of env below
  */
 const CACHE_KEY = "__taskwaveMongoose";
+const SHUTDOWN_HOOK_KEY = "__taskwaveMongooseShutdownHook";
 
 const globalForMongo = globalThis;
 if (!globalForMongo[CACHE_KEY]) {
@@ -66,5 +67,37 @@ async function connectDB() {
   return mongoose;
 }
 
+/**
+ * Closes the Mongoose connection and clears the connect promise cache.
+ * Idempotent; safe if already disconnected.
+ */
+async function disconnectDB() {
+  cache.promise = null;
+  if (mongoose.connection.readyState === 0) {
+    return;
+  }
+  await mongoose.disconnect();
+}
+
+/**
+ * Registers SIGTERM/SIGINT handlers once per process to disconnect cleanly (Docker/Coolify).
+ * Does not call process.exit — Next.js handles server teardown.
+ */
+function registerMongoShutdown() {
+  if (globalForMongo[SHUTDOWN_HOOK_KEY]) {
+    return;
+  }
+  globalForMongo[SHUTDOWN_HOOK_KEY] = true;
+
+  const run = () => {
+    void disconnectDB().catch((err) => {
+      console.error("[db] disconnect on shutdown failed", err);
+    });
+  };
+
+  process.once("SIGTERM", run);
+  process.once("SIGINT", run);
+}
+
 export default connectDB;
-export { connectDB };
+export { connectDB, disconnectDB, registerMongoShutdown };
