@@ -3,6 +3,16 @@ import { jwtVerify } from "jose";
 import { getRequestIp, isIpBlockedInMemory } from "@/lib/fraud/guards";
 import { ROLE } from "@/lib/auth/roles";
 
+function isMaintenanceModeEnabled() {
+  const v = process.env.MAINTENANCE_MODE;
+  return v === "1" || v === "true" || v === "yes";
+}
+
+/** Public folder / known static extensions — still protected by IP rules; only skips maintenance redirect. */
+function isLikelyPublicAsset(pathname) {
+  return /\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?|woff|ttf|eot|txt|xml|webmanifest)$/i.test(pathname);
+}
+
 const protectedUserRoutes = ["/dashboard", "/profile", "/activate"];
 const protectedAdminRoutes = ["/admin"];
 const protectedClientRoutes = ["/client"];
@@ -26,6 +36,27 @@ export async function middleware(request) {
     return response;
   };
   const { pathname } = request.nextUrl;
+
+  if (isMaintenanceModeEnabled()) {
+    if (pathname.startsWith("/api/")) {
+      return withTiming(
+        NextResponse.json(
+          { success: false, message: "Service temporarily unavailable", maintenance: true },
+          {
+            status: 503,
+            headers: { "Retry-After": "3600", "Cache-Control": "no-store" },
+          },
+        ),
+      );
+    }
+    const maintenanceBypass =
+      pathname === "/maintenance" || isLikelyPublicAsset(pathname);
+    if (!maintenanceBypass) {
+      const url = new URL("/maintenance", request.url);
+      return withTiming(NextResponse.redirect(url, 307));
+    }
+  }
+
   if (pathname === "/") {
     const url = new URL("/signup", request.url);
     const res = NextResponse.redirect(url, 302);
@@ -64,5 +95,11 @@ export async function middleware(request) {
 }
 
 export const config = {
-  matcher: ["/", "/dashboard/:path*", "/profile/:path*", "/admin/:path*", "/client/:path*", "/activate"],
+  matcher: [
+    /*
+     * Run middleware on all paths except Next.js internals and favicon so maintenance mode
+     * and route guards apply consistently.
+     */
+    "/((?!_next/static|_next/image|favicon.ico).*)",
+  ],
 };
