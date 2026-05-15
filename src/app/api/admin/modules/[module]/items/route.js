@@ -3,6 +3,9 @@ import { requireAuth } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/api";
 import ModuleItem from "@/models/ModuleItem";
 import { isSupportedModule, normalizeModuleKey, toModuleType } from "@/lib/modules/constants";
+import { createTtlCache } from "@/lib/cache/ttl-cache";
+
+const ADMIN_MODULE_ITEMS_CACHE = createTtlCache("admin-module-items", 20_000);
 
 export async function GET(request, { params }) {
   const auth = await requireAuth(["admin", "support"]);
@@ -19,12 +22,17 @@ export async function GET(request, { params }) {
   const filter = { module: toModuleType(slug) };
   if (status) filter.status = status;
   if (search) filter.title = { $regex: search, $options: "i" };
+  const cacheKey = `${slug}|${page}|${pageSize}|${status}|${search}`;
+  const cached = ADMIN_MODULE_ITEMS_CACHE.get(cacheKey);
+  if (cached) return ok(cached);
 
   const [total, rows] = await Promise.all([
     ModuleItem.countDocuments(filter),
     ModuleItem.find(filter).sort({ createdAt: -1 }).skip((page - 1) * pageSize).limit(pageSize).lean(),
   ]);
-  return ok({ data: rows, total, page, pageSize });
+  const payload = { data: rows, total, page, pageSize };
+  ADMIN_MODULE_ITEMS_CACHE.set(cacheKey, payload);
+  return ok(payload);
 }
 
 export async function POST(request, { params }) {

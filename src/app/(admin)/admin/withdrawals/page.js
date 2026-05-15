@@ -7,6 +7,15 @@ import { adminNavItems } from "@/lib/nav/admin-nav";
 import { toast } from "sonner";
 import { StatusChip } from "@/components/ui/StatusChip";
 
+function withdrawalFailedReasonTitle(row) {
+  if (row.status !== "failed") return undefined;
+  const notes = String(row.notes || "").trim();
+  if (notes) return notes;
+  const cb = row.metadata?.lastCallbackStatus;
+  if (cb != null && String(cb).trim() !== "") return `Gateway status: ${String(cb).trim()}`;
+  return "No failure details recorded";
+}
+
 export default function AdminWithdrawalsPage() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -160,7 +169,7 @@ export default function AdminWithdrawalsPage() {
       field: "status",
       header: "Status",
       sortable: false,
-      render: (row) => <StatusChip status={row.status} />,
+      render: (row) => <StatusChip status={row.status} title={withdrawalFailedReasonTitle(row)} />,
     },
     { field: "createdAt", header: "Date", sortable: false, render: (row) => new Date(row.createdAt).toLocaleString() },
     {
@@ -171,8 +180,16 @@ export default function AdminWithdrawalsPage() {
         const isPending = row.status === "pending";
         const isFailed = row.status === "failed";
         const ledgerAck = Boolean(row.metadata?.noRefundLedgerAcknowledged);
+        const walletAlreadyReconciledInitNeverCompleted =
+          isFailed &&
+          !row.hasRefundTransaction &&
+          row.metadata?.balanceRefunded === true &&
+          row.metadata?.payoutGatewayQueued === false;
         const canAttemptRefund =
-          isFailed && !row.hasRefundTransaction && Number(row.amount || 0) + Number(row.fee || 0) > 0;
+          isFailed &&
+          !row.hasRefundTransaction &&
+          !walletAlreadyReconciledInitNeverCompleted &&
+          Number(row.amount || 0) + Number(row.fee || 0) > 0;
         const canShowRefund = canAttemptRefund && ledgerAck;
         const canShowLedgerRefund = canAttemptRefund && !ledgerAck;
         const btnDense =
@@ -183,6 +200,13 @@ export default function AdminWithdrawalsPage() {
             <div className="flex flex-wrap items-center gap-1">
               {row.hasRefundTransaction ? (
                 <span className="text-xs leading-snug text-[var(--muted)]">Refunded</span>
+              ) : walletAlreadyReconciledInitNeverCompleted ? (
+                <span
+                  className="text-xs leading-snug text-[var(--muted)]"
+                  title="Payout never reached the gateway; wallet was rolled back when the request failed. No manual refund."
+                >
+                  —
+                </span>
               ) : canShowLedgerRefund ? (
                 <button
                   type="button"

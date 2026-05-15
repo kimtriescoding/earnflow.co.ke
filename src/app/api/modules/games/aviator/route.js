@@ -8,275 +8,30 @@ import { submitEarningEvent } from "@/lib/ledger/earnings";
 import { logModuleInteraction } from "@/lib/modules/interactions";
 import { ok, fail } from "@/lib/api";
 import { creditAviatorWallet, debitAviatorWallet, getOrCreateAviatorWallet } from "@/lib/aviator/wallet";
-
-const BETTING_OPEN_MS = 10000;
-const BETTING_LOCK_MS = 5000;
-const BETTING_MS = BETTING_OPEN_MS + BETTING_LOCK_MS;
-const MAX_FLIGHT_MS = 12000;
-const CRASH_BUFFER_MS = 2500;
-const ROUND_DURATION_MS = BETTING_MS + MAX_FLIGHT_MS + CRASH_BUFFER_MS;
-const GROWTH_K = 0.0002;
-
-function pseudoRandom(seed) {
-  const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453123;
-  return x - Math.floor(x);
-}
-
-function clampBurst(value, min = 1.01, max = 100) {
-  return Math.min(max, Math.max(min, Number(value || 0)));
-}
-
-function userSeed(userId = "") {
-  return String(userId || "")
-    .split("")
-    .reduce((acc, ch, index) => acc + ch.charCodeAt(0) * (index + 1), 0);
-}
-
-function deriveRoundBustAt(roundId, aviatorConfig = {}) {
-  const fixedBustAt = Number(aviatorConfig.fixedBustAt || 0);
-  const maxBurst = Math.min(100, Math.max(2, Number(aviatorConfig.maxBurst || 12)));
-  if (fixedBustAt > 1) return Number(clampBurst(fixedBustAt, 1.01, maxBurst).toFixed(2));
-
-  const r = pseudoRandom(roundId);
-  let rawBustAt = 1.1 + r * 5.9;
-  if (r < 0.03) rawBustAt = 1.01 + r * 0.45;
-  if (r > 0.985) rawBustAt = 10 + r * 35;
-  return Number(clampBurst(rawBustAt, 1.01, maxBurst).toFixed(2));
-}
-
-function deriveBetBustAt({ roundId, userId, cashoutAt, aviatorConfig = {} }) {
-  const fixedBustAt = Number(aviatorConfig.fixedBustAt || 0);
-  const maxBurst = Math.min(100, Math.max(2, Number(aviatorConfig.maxBurst || 12)));
-  if (fixedBustAt > 1) return Number(clampBurst(fixedBustAt, 1.01, maxBurst).toFixed(2));
-
-  const probability = Math.min(0.95, Math.max(0, Number(aviatorConfig.winProbability ?? 60) / 100));
-  if (probability === 0) return 1.0;
-  const uidSeed = userSeed(userId);
-  const outcomeRoll = pseudoRandom(roundId * 1.07 + uidSeed * 0.017 + 11);
-  const jitterRoll = pseudoRandom(roundId * 1.73 + uidSeed * 0.021 + 29);
-  const targetCashout = clampBurst(Number(cashoutAt || 1.1), 1.1, maxBurst);
-
-  if (outcomeRoll <= probability) {
-    const minWinBust = targetCashout;
-    const maxWinBust = maxBurst;
-    const winBustAt = minWinBust + jitterRoll * Math.max(0, maxWinBust - minWinBust);
-    return Number(clampBurst(winBustAt, 1.01, maxBurst).toFixed(2));
-  }
-
-  const maxLoseBust = Math.max(1.01, Math.min(maxBurst, targetCashout - 0.01));
-  const loseBustAt = 1.01 + jitterRoll * Math.max(0, maxLoseBust - 1.01);
-  return Number(clampBurst(loseBustAt, 1.01, maxBurst).toFixed(2));
-}
-
-function getRoundState(nowMs, aviatorConfig = {}) {
-  const roundId = Math.floor(nowMs / ROUND_DURATION_MS);
-  const roundStartMs = roundId * ROUND_DURATION_MS;
-  const elapsedMs = nowMs - roundStartMs;
-  const bustAt = deriveRoundBustAt(roundId, aviatorConfig);
-  const crashAtMs = Math.min(MAX_FLIGHT_MS, Math.max(1, Math.round(Math.log(bustAt) / GROWTH_K)));
-
-  if (elapsedMs < BETTING_MS) {
-    const isOpen = elapsedMs < BETTING_OPEN_MS;
-    return {
-      roundId,
-      phase: isOpen ? "betting" : "locked",
-      canPlaceBet: isOpen,
-      bustAt,
-      multiplier: 1,
-      timeToNextPhaseMs: isOpen ? BETTING_OPEN_MS - elapsedMs : BETTING_MS - elapsedMs,
-      elapsedInPhaseMs: elapsedMs,
-      crashAtMs,
-      roundStartMs,
-      flightStartMs: roundStartMs + BETTING_MS,
-    };
-  }
-
-  const flightElapsed = elapsedMs - BETTING_MS;
-  if (flightElapsed < crashAtMs) {
-    return {
-      roundId,
-      phase: "flying",
-      canPlaceBet: false,
-      bustAt,
-      multiplier: Number(Math.exp(GROWTH_K * flightElapsed).toFixed(2)),
-      timeToNextPhaseMs: crashAtMs - flightElapsed,
-      elapsedInPhaseMs: flightElapsed,
-      crashAtMs,
-      roundStartMs,
-      flightStartMs: roundStartMs + BETTING_MS,
-    };
-  }
-
-  return {
-    roundId,
-    phase: "crashed",
-    canPlaceBet: false,
-    bustAt,
-    multiplier: bustAt,
-    timeToNextPhaseMs: ROUND_DURATION_MS - elapsedMs,
-    elapsedInPhaseMs: Math.min(flightElapsed, MAX_FLIGHT_MS),
-    crashAtMs,
-    roundStartMs,
-    flightStartMs: roundStartMs + BETTING_MS,
-  };
-}
-
-function buildBetId({ userId, roundId, cashoutAt, betAmount, placedAt }) {
-  return `${String(userId)}:${roundId}:${Number(cashoutAt).toFixed(2)}:${Number(betAmount).toFixed(2)}:${placedAt}`;
-}
-
-function getRoundIdAndElapsed(nowMs) {
-  const roundId = Math.floor(nowMs / ROUND_DURATION_MS);
-  const roundStartMs = roundId * ROUND_DURATION_MS;
-  return {
-    roundId,
-    roundStartMs,
-    elapsedMs: Math.max(0, nowMs - roundStartMs),
-  };
-}
-
-function canSettleBet(nowMs, betRoundId, betBustAt) {
-  const { roundId, elapsedMs } = getRoundIdAndElapsed(nowMs);
-  if (betRoundId < roundId) return true;
-  if (betRoundId > roundId) return false;
-  const flightElapsedMs = Math.max(0, elapsedMs - BETTING_MS);
-  const betCrashAtMs = getCrashAtMsForBust(betBustAt);
-  return elapsedMs >= BETTING_MS && flightElapsedMs >= betCrashAtMs;
-}
-
-function getBetLiveMultiplier(nowMs, betRoundId, betBustAt) {
-  const { roundId, elapsedMs } = getRoundIdAndElapsed(nowMs);
-  if (betRoundId !== roundId) return null;
-  if (elapsedMs < BETTING_MS) return null;
-  const flightElapsedMs = Math.max(0, elapsedMs - BETTING_MS);
-  const betCrashAtMs = getCrashAtMsForBust(betBustAt);
-  if (flightElapsedMs >= betCrashAtMs) return null;
-  const live = Math.exp(GROWTH_K * flightElapsedMs);
-  return Number(Math.min(live, Number(betBustAt || live)).toFixed(2));
-}
-
-function getCrashAtMsForBust(bustAt) {
-  const safeBust = Number(bustAt || 0);
-  if (safeBust <= 1) return 0;
-  return Math.min(MAX_FLIGHT_MS, Math.max(1, Math.round(Math.log(safeBust) / GROWTH_K)));
-}
-
-function resolveAviatorSettings(defaults, runtimeConfig) {
-  const merged = {
-    ...(defaults && typeof defaults === "object" ? defaults : {}),
-    ...(runtimeConfig && typeof runtimeConfig === "object" ? runtimeConfig : {}),
-  };
-  const fixedBustAt = Number(merged.fixedBustAt || 0);
-  return {
-    fixedBustAt: Number.isFinite(fixedBustAt) ? fixedBustAt : 0,
-    minBetAmount: Math.max(1, Number(Number(merged.minBetAmount ?? 10).toFixed(2))),
-    winProbability: Math.min(95, Math.max(0, Number(Number(merged.winProbability ?? 60).toFixed(2)))),
-    maxBurst: Math.min(100, Math.max(2, Number(Number(merged.maxBurst ?? 12).toFixed(2)))),
-  };
-}
+import {
+  buildBetId,
+  canSettleBet,
+  deriveBetBustAt,
+  getBetLiveMultiplier,
+  getRoundState,
+  resolveAviatorSettings,
+} from "@/lib/aviator/engine";
+import { getAviatorGetPayload, invalidateAviatorUserReadCache } from "@/lib/aviator/read-cache";
+import { createGetTimer, withPrivateCacheControl } from "@/lib/observability/get-timing";
+import { invalidateDashboardUserCaches } from "@/lib/cache/get-cache-invalidation";
 
 export async function GET() {
+  const timer = createGetTimer("api_aviator");
   const auth = await requireAuth(["user", "admin"]);
   if (auth.error) return auth.error;
   await connectDB();
   const moduleStatus = await getSetting("module_status", {});
   if (!isModuleEnabled(moduleStatus, "aviator")) return fail("Aviator is disabled", 403);
-  const defaults = await getSetting("module_aviator_default", {});
-  const config = await ModuleConfig.findOne({ key: "game:aviator" }).lean();
-  const settings = resolveAviatorSettings(defaults, config?.value);
-  const wallet = await getOrCreateAviatorWallet(auth.payload.sub);
-  const nowMs = Date.now();
-  const state = getRoundState(nowMs, settings);
 
-  const recentBets = await AviatorLedger.find({ userId: auth.payload.sub, type: "aviator_bet" })
-    .sort({ createdAt: -1 })
-    .limit(10)
-    .lean();
-  const betIds = recentBets.map((item) => String(item.metadata?.betId || "")).filter(Boolean);
-  const settled = await AviatorLedger.find({
-    userId: auth.payload.sub,
-    type: { $in: ["aviator_payout", "aviator_loss"] },
-    "metadata.betId": { $in: betIds },
-  })
-    .select("metadata.betId")
-    .lean();
-  const settledSet = new Set(settled.map((item) => String(item.metadata?.betId || "")));
-  const pendingBet =
-    recentBets
-      .map((item) => ({
-        betId: String(item.metadata?.betId || ""),
-        status: "pending",
-        roundId: Number(item.metadata?.roundId || 0),
-        cashoutAt: Number(item.metadata?.cashoutAt || 0),
-        betAmount: Number(item.metadata?.betAmount || 0),
-        bustAt: Number(item.metadata?.bustAt || 0),
-      }))
-      .find((item) => item.betId && !settledSet.has(item.betId)) || null;
-
-  const stateWithBet =
-    pendingBet && pendingBet.roundId === state.roundId
-      ? (() => {
-          const scopedBustAt = Number(clampBurst(pendingBet.bustAt || state.bustAt, 1, settings.maxBurst).toFixed(2));
-          const scopedCrashAtMs = getCrashAtMsForBust(scopedBustAt);
-          const elapsedMs = Math.max(0, nowMs - (state.roundStartMs || 0));
-          const flightElapsedMs = Math.max(0, elapsedMs - BETTING_MS);
-          const scopedPhase =
-            elapsedMs < BETTING_OPEN_MS
-              ? "betting"
-              : elapsedMs < BETTING_MS
-                ? "locked"
-                : flightElapsedMs < scopedCrashAtMs
-                  ? "flying"
-                  : "crashed";
-          const scopedMultiplier =
-            scopedPhase === "betting" || scopedPhase === "locked"
-              ? 1
-              : scopedPhase === "crashed"
-                ? scopedBustAt
-                : Number(Math.min(scopedBustAt, Math.exp(GROWTH_K * flightElapsedMs)).toFixed(2));
-          const scopedTimeToNextPhaseMs =
-            scopedPhase === "betting"
-              ? Math.max(0, BETTING_OPEN_MS - elapsedMs)
-              : scopedPhase === "locked"
-                ? Math.max(0, BETTING_MS - elapsedMs)
-              : scopedPhase === "flying"
-                ? Math.max(0, scopedCrashAtMs - flightElapsedMs)
-                : Math.max(0, ROUND_DURATION_MS - elapsedMs);
-          return {
-            ...state,
-            phase: scopedPhase,
-            canPlaceBet: scopedPhase === "betting",
-            bustAt: scopedBustAt,
-            crashAtMs: scopedCrashAtMs,
-            multiplier: scopedMultiplier,
-            timeToNextPhaseMs: scopedTimeToNextPhaseMs,
-          };
-        })()
-      : state;
-
-  const history = [];
-  for (let i = 1; i <= 14; i += 1) {
-    const rid = state.roundId - i;
-    if (rid < 0) continue;
-    history.push({ roundId: rid, bustAt: deriveRoundBustAt(rid, settings) });
-  }
-
-  return ok({
-    data: {
-      ...stateWithBet,
-      nowMs,
-      roundDurationMs: ROUND_DURATION_MS,
-      bettingOpenMs: BETTING_OPEN_MS,
-      bettingLockMs: BETTING_LOCK_MS,
-      bettingMs: BETTING_MS,
-      maxFlightMs: MAX_FLIGHT_MS,
-      pendingBet,
-      history,
-      minBetAmount: settings.minBetAmount,
-      maxBurst: settings.maxBurst,
-      walletBalance: Number(wallet.balance || 0),
-    },
-  });
+  const { payload, cacheHit } = await getAviatorGetPayload(auth.payload.sub);
+  if (cacheHit) timer.markCacheHit();
+  const response = withPrivateCacheControl(ok({ data: payload }), 1);
+  return timer.finish(response);
 }
 
 export async function POST(request) {
@@ -292,6 +47,11 @@ export async function POST(request) {
   const settings = resolveAviatorSettings(defaults, config?.value);
   const nowMs = Date.now();
   const state = getRoundState(nowMs, settings);
+
+  const bustCache = () => {
+    invalidateAviatorUserReadCache(auth.payload.sub);
+    invalidateDashboardUserCaches(auth.payload.sub);
+  };
 
   if (action === "place") {
     const roundId = Number(body.roundId);
@@ -340,15 +100,19 @@ export async function POST(request) {
       metadata: { betId, roundId, bustAt: betBustAt, betAmount, placedAt },
     });
     if (debit.error === "INSUFFICIENT_BALANCE") return fail("Insufficient Aviator balance");
-    return ok({
-      data: {
-        betId,
-        roundId,
-        betAmount,
-        bustAt: betBustAt,
-        walletBalance: Number(debit.wallet?.balance || 0),
+    bustCache();
+    return ok(
+      {
+        data: {
+          betId,
+          roundId,
+          betAmount,
+          bustAt: betBustAt,
+          walletBalance: Number(debit.wallet?.balance || 0),
+        },
       },
-    }, 201);
+      201
+    );
   }
 
   if (action === "cashout") {
@@ -383,7 +147,6 @@ export async function POST(request) {
       type: "aviator_payout",
       metadata: { roundId: bet.roundId, betId, cashoutMultiplier: multiplier, bustAt: bet.bustAt },
     });
-    /** Main-wallet EarningEvents only for real game credit; Aviator ledger still records the cashout. */
     const event =
       reward > 0
         ? await submitEarningEvent({
@@ -409,6 +172,7 @@ export async function POST(request) {
       earningEventId: event?._id || null,
       metadata: { betId, roundId: bet.roundId, betAmount: bet.betAmount, cashoutMultiplier: multiplier, bustAt: bet.bustAt },
     });
+    bustCache();
     return ok({
       data: {
         betId,
@@ -446,8 +210,7 @@ export async function POST(request) {
       bustAt: Number(betEntry.metadata?.bustAt || 0),
     };
 
-    const canSettle = canSettleBet(nowMs, bet.roundId, bet.bustAt);
-    if (!canSettle) return fail("Round still running");
+    if (!canSettleBet(nowMs, bet.roundId, bet.bustAt)) return fail("Round still running");
 
     const wallet = await getOrCreateAviatorWallet(auth.payload.sub);
     await AviatorLedger.create({
@@ -465,6 +228,7 @@ export async function POST(request) {
       userId: auth.payload.sub,
       metadata: { betId, roundId: bet.roundId, betAmount: bet.betAmount, bustAt: bet.bustAt },
     });
+    bustCache();
     return ok({ data: { betId, ...bet, reward: 0, outcome: "lost", walletBalance: Number(wallet.balance || 0) } });
   }
 

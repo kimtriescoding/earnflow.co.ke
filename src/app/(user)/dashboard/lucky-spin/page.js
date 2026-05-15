@@ -92,7 +92,7 @@ export default function LuckySpinPage() {
       await loadLuckySpinState().catch(() => {});
       if (cancelled) return;
 
-      fetch("/api/auth/me")
+      fetch("/api/auth/me?lite=1")
         .then((res) => res.json())
         .then((data) => {
           if (!data?.success) return;

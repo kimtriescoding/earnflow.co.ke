@@ -39,16 +39,20 @@ function humanizeStatus(status) {
 
 /**
  * Pill status indicator for tables and detail views.
+ * @param {string} [title] - Native tooltip (e.g. failure reason). Overrides auto title from long labels.
  */
-export function StatusChip({ status, label, className = "" }) {
+export function StatusChip({ status, label, title: titleProp, className = "" }) {
   const tone = statusTone(status);
   const display =
     label != null && String(label).trim() !== "" ? String(label).trim() : humanizeStatus(status) || "—";
 
+  const titleFromProp = titleProp != null && String(titleProp).trim() !== "" ? String(titleProp).trim() : undefined;
+  const title = titleFromProp ?? (display.length > 24 ? display : undefined);
+
   return (
     <span
-      className={`inline-flex max-w-full items-center rounded-full border px-2.5 py-1 text-xs font-semibold capitalize tracking-[0.01em] ${TONE_CLASSES[tone]} ${className}`.trim()}
-      title={display.length > 24 ? display : undefined}
+      className={`inline-flex max-w-full items-center rounded-full border px-2.5 py-1 text-xs font-semibold capitalize tracking-[0.01em] ${TONE_CLASSES[tone]} ${titleFromProp ? "cursor-help " : ""}${className}`.trim()}
+      title={title}
     >
       <span className="truncate">{display}</span>
     </span>

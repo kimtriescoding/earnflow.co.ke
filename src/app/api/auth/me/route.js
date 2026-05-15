@@ -4,9 +4,10 @@ import { fail, ok } from "@/lib/api";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import connectDB from "@/lib/db";
 import { getCachedSessionUserProfile } from "@/lib/auth/session-state";
+import { createGetTimer, withPrivateCacheControl } from "@/lib/observability/get-timing";
 
 export async function GET(request) {
-  const start = performance.now();
+  const timer = createGetTimer("api_auth_me");
   const auth = await requireAuth(["user", "client", "admin", "support"]);
   if (auth.error) return auth.error;
   const { searchParams } = new URL(request.url);
@@ -25,25 +26,29 @@ export async function GET(request) {
   const isBlocked = Boolean(user?.isBlocked);
   const isActivated = Boolean(user?.isActivated);
 
-  const response = ok({
-    data: {
-      id: auth.payload.sub,
-      username: user?.username || auth.payload.username || "user",
-      email: user?.email || "",
-      role: user?.role || auth.payload.role || "user",
-      phoneNumber: user?.phoneNumber || "",
-      referralCode: user?.referralCode || "",
-      referredBy,
-      isActivated,
-      isBlocked,
-      accountStatus: isBlocked ? "blocked" : isActivated ? "active" : "pending_activation",
-      impersonatedBy: auth.payload.impersonatedBy || null,
-      mfaEnabled: Boolean(user?.mfaEnabled),
-      mfaVerified: Boolean(auth.payload.mfa_verified),
-    },
-  });
-  response.headers.set("Server-Timing", `api_auth_me;dur=${(performance.now() - start).toFixed(1)}`);
-  return response;
+  if (lite) timer.markCacheHit();
+  return timer.finish(
+    withPrivateCacheControl(
+      ok({
+        data: {
+          id: auth.payload.sub,
+          username: user?.username || auth.payload.username || "user",
+          email: user?.email || "",
+          role: user?.role || auth.payload.role || "user",
+          phoneNumber: user?.phoneNumber || "",
+          referralCode: user?.referralCode || "",
+          referredBy,
+          isActivated,
+          isBlocked,
+          accountStatus: isBlocked ? "blocked" : isActivated ? "active" : "pending_activation",
+          impersonatedBy: auth.payload.impersonatedBy || null,
+          mfaEnabled: Boolean(user?.mfaEnabled),
+          mfaVerified: Boolean(auth.payload.mfa_verified),
+        },
+      }),
+      lite ? 30 : 0
+    )
+  );
 }
 
 export async function PATCH(request) {

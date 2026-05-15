@@ -8,6 +8,8 @@ import { requireAuth } from "@/lib/auth/guards";
 import { ok } from "@/lib/api";
 import { DASHBOARD_EARNINGS_TIMEZONE } from "@/lib/config/dashboard-timezone";
 import { MATCH_METADATA_REAL_FOR_REVENUE } from "@/lib/payments/transaction-real";
+import { ADMIN_SUMMARY_CACHE } from "@/lib/cache/get-cache-invalidation";
+import { createGetTimer, withPrivateCacheControl } from "@/lib/observability/get-timing";
 
 const TZ = DASHBOARD_EARNINGS_TIMEZONE;
 
@@ -26,8 +28,14 @@ function sameCalendarDay(fieldPath) {
 }
 
 export async function GET() {
+  const timer = createGetTimer("api_admin_summary");
   const auth = await requireAuth(["admin", "support"]);
   if (auth.error) return auth.error;
+  const cached = ADMIN_SUMMARY_CACHE.get("global");
+  if (cached) {
+    timer.markCacheHit();
+    return timer.finish(withPrivateCacheControl(ok({ data: cached }), 90));
+  }
   await connectDB();
 
   const [
@@ -80,21 +88,20 @@ export async function GET() {
   const totalWithdrawable = Number(Number(walletAgg[0]?.totalWithdrawable || 0).toFixed(2));
   const earningsToday = Number((activationPaymentsToday - commissionsPaidToday).toFixed(2));
 
-  return ok({
-    data: {
-      totalUsers,
-      totalActiveUsers,
-      totalInactiveUsers,
-      activatedToday,
-      activationPaymentsToday: Number(activationPaymentsToday.toFixed(2)),
-      commissionsPaidToday: Number(commissionsPaidToday.toFixed(2)),
-      totalCommissionsPaid: Number(totalCommissionsPaid.toFixed(2)),
-      earningsToday,
-      totalWithdrawable,
-      pendingWithdrawals,
-      completedWithdrawals,
-      /** IANA zone used for all “today” boundaries above. */
-      statsTimeZone: TZ,
-    },
-  });
+  const data = {
+    totalUsers,
+    totalActiveUsers,
+    totalInactiveUsers,
+    activatedToday,
+    activationPaymentsToday: Number(activationPaymentsToday.toFixed(2)),
+    commissionsPaidToday: Number(commissionsPaidToday.toFixed(2)),
+    totalCommissionsPaid: Number(totalCommissionsPaid.toFixed(2)),
+    earningsToday,
+    totalWithdrawable,
+    pendingWithdrawals,
+    completedWithdrawals,
+    statsTimeZone: TZ,
+  };
+  ADMIN_SUMMARY_CACHE.set("global", data);
+  return timer.finish(withPrivateCacheControl(ok({ data }), 90));
 }

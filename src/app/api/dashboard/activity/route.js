@@ -7,6 +7,8 @@ import { ok } from "@/lib/api";
 import { referralUplineSourceSlug } from "@/lib/dashboard/referral-feed-naming";
 import { getSetting } from "@/models/Settings";
 import { isEarningSourceEnabled, normalizeModuleAccess } from "@/lib/modules/module-access";
+import { DASHBOARD_ACTIVITY_CACHE } from "@/lib/cache/get-cache-invalidation";
+import { createGetTimer, withPrivateCacheControl } from "@/lib/observability/get-timing";
 
 function sanitizeMetadata(metadata) {
   if (!metadata || typeof metadata !== "object") return {};
@@ -15,8 +17,12 @@ function sanitizeMetadata(metadata) {
   return safe;
 }
 
+function buildActivityCacheKey(userId, { page, pageSize, source, status }) {
+  return `${userId}|${page}|${pageSize}|${source}|${status}`;
+}
+
 export async function GET(request) {
-  const start = performance.now();
+  const timer = createGetTimer("api_dashboard_activity");
   const auth = await requireAuth(["user", "admin"]);
   if (auth.error) return auth.error;
   await connectDB();
@@ -28,6 +34,18 @@ export async function GET(request) {
   const status = String(searchParams.get("status") || "").trim();
 
   const boundedPage = Math.max(1, page);
+  const cacheKey = buildActivityCacheKey(auth.payload.sub, {
+    page: boundedPage,
+    pageSize,
+    source,
+    status,
+  });
+  const cached = DASHBOARD_ACTIVITY_CACHE.get(cacheKey);
+  if (cached) {
+    timer.markCacheHit();
+    return timer.finish(withPrivateCacheControl(ok(cached), 15));
+  }
+
   const feedWindow = Math.min(220, Math.max(pageSize * boundedPage * 2, 80));
   const shouldIncludeNonEarnings = !source;
   const [events, commissions, transactions] = await Promise.all([
@@ -97,7 +115,7 @@ export async function GET(request) {
 
   const merged = mergedFull.slice((boundedPage - 1) * pageSize, boundedPage * pageSize);
 
-  const response = ok({ data: merged, total: mergedFull.length, page: boundedPage, pageSize });
-  response.headers.set("Server-Timing", `api_dashboard_activity;dur=${(performance.now() - start).toFixed(1)}`);
-  return response;
+  const payload = { data: merged, total: mergedFull.length, page: boundedPage, pageSize };
+  DASHBOARD_ACTIVITY_CACHE.set(cacheKey, payload);
+  return timer.finish(withPrivateCacheControl(ok(payload), 15));
 }

@@ -18,12 +18,11 @@ import {
 } from "@/lib/modules/module-access";
 import { MATCH_TRANSACTION_REAL_FOR_REVENUE } from "@/lib/payments/transaction-real";
 import { toPublicEarningEventJSON } from "@/lib/ledger/earnings";
-import { createTtlCache } from "@/lib/cache/ttl-cache";
-
-const SUMMARY_CACHE = createTtlCache("dashboard-summary", 20_000);
+import { DASHBOARD_SUMMARY_CACHE } from "@/lib/cache/get-cache-invalidation";
+import { createGetTimer, withPrivateCacheControl } from "@/lib/observability/get-timing";
 
 export async function GET() {
-  const start = performance.now();
+  const timer = createGetTimer("api_dashboard_summary");
   const auth = await requireAuth(["user", "admin"]);
   if (auth.error) return auth.error;
   await connectDB();
@@ -31,16 +30,18 @@ export async function GET() {
   const moduleAccess = normalizeModuleAccess(moduleStatusRaw);
 
   const userIdStr = String(auth.payload.sub);
-  const cached = SUMMARY_CACHE.get(userIdStr);
-  if (cached) return ok({ data: cached });
+  const cached = DASHBOARD_SUMMARY_CACHE.get(userIdStr);
+  if (cached) {
+    timer.markCacheHit();
+    return timer.finish(withPrivateCacheControl(ok({ data: cached }), 45));
+  }
   const userObjectId = new mongoose.Types.ObjectId(userIdStr);
+  const earningAccessMatch = earningEventAccessMatch(moduleAccess);
 
   const linkedReferralLedgerIds = await ReferralCommission.distinct("ledgerTransactionId", {
     beneficiaryUserId: userObjectId,
     ledgerTransactionId: { $ne: null },
   });
-
-  const earningAccessMatch = earningEventAccessMatch(moduleAccess);
 
   const [
     wallet,
@@ -52,7 +53,7 @@ export async function GET() {
     referralOrphanTxAgg,
     referralFromEarningEventsAgg,
     referrals,
-    withdrawalsTx,
+    withdrawalsAgg,
     user,
     todaysEarnings,
   ] = await Promise.all([
@@ -98,9 +99,23 @@ export async function GET() {
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]),
     User.countDocuments({ referredByUserId: userIdStr }),
-    Transaction.find({ userId: userIdStr, type: "withdrawal", status: "completed", ...MATCH_TRANSACTION_REAL_FOR_REVENUE })
-      .select("amount")
-      .lean(),
+    Transaction.aggregate([
+      {
+        $match: {
+          userId: userObjectId,
+          type: "withdrawal",
+          status: "completed",
+          ...MATCH_TRANSACTION_REAL_FOR_REVENUE,
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalAmount: { $sum: { $abs: { $ifNull: ["$amount", 0] } } },
+          totalCount: { $sum: 1 },
+        },
+      },
+    ]),
     User.findById(userIdStr).select("referralCode username").lean(),
     sumTodaysEarningsForUser(userIdStr, { moduleAccess }),
   ]);
@@ -111,8 +126,8 @@ export async function GET() {
   const referralEarned = Number((fromCommissions + fromOrphanReferralTx + fromReferralEarningEvents).toFixed(2));
 
   const withdrawals = {
-    totalAmount: Math.abs(withdrawalsTx.reduce((sum, tx) => sum + Number(tx.amount || 0), 0)),
-    totalCount: withdrawalsTx.length,
+    totalAmount: Number(withdrawalsAgg?.[0]?.totalAmount || 0),
+    totalCount: Number(withdrawalsAgg?.[0]?.totalCount || 0),
   };
   const approvedBySource = approvedBySourceAgg.reduce((acc, row) => {
     const src = String(row._id || "other");
@@ -155,8 +170,6 @@ export async function GET() {
     todaysEarnings,
     todaysEarningsTimeZone: DASHBOARD_EARNINGS_TIMEZONE,
   };
-  SUMMARY_CACHE.set(userIdStr, data);
-  const response = ok({ data });
-  response.headers.set("Server-Timing", `api_dashboard_summary;dur=${(performance.now() - start).toFixed(1)}`);
-  return response;
+  DASHBOARD_SUMMARY_CACHE.set(userIdStr, data);
+  return timer.finish(withPrivateCacheControl(ok({ data }), 15));
 }

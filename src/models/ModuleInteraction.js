@@ -21,5 +21,6 @@ const schema = new mongoose.Schema(
 );
 
 schema.index({ module: 1, createdAt: -1 });
+schema.index({ module: 1, action: 1, itemId: 1, status: 1 });
 
 export default getModel("ModuleInteraction", schema);

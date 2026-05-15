@@ -5,11 +5,11 @@ import ModuleItem from "@/models/ModuleItem";
 import { ok, fail } from "@/lib/api";
 import {
   adminAcademicTaskBaseFilter,
-  countDistinctAcademicSubmitters,
   filterItemsByTimeWindow,
   maxParticipantsCap,
   slotsRemainingForItem,
 } from "@/lib/modules/academic";
+import { countDistinctParticipantsByItemIds } from "@/lib/modules/participant-counts";
 
 export async function GET() {
   const auth = await requireAuth(["user", "admin"]);
@@ -23,10 +23,15 @@ export async function GET() {
 
   const now = new Date();
   const open = filterItemsByTimeWindow(rows, now);
+  const filledByItem = await countDistinctParticipantsByItemIds(
+    "academic",
+    "submit",
+    open.map((item) => item._id)
+  );
 
   const data = [];
   for (const item of open) {
-    const filled = await countDistinctAcademicSubmitters(item._id);
+    const filled = filledByItem.get(String(item._id)) || 0;
     const slotsRemaining = slotsRemainingForItem(item, filled);
     const cap = maxParticipantsCap(item.metadata || {});
     if (cap > 0 && slotsRemaining === 0) continue;

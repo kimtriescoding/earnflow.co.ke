@@ -12,6 +12,7 @@ import {
   normalizeWithdrawalFeeMode,
   sanitizeWithdrawalFeeTiers,
 } from "@/lib/payments/withdrawal-fees";
+import { invalidateAdminCaches, invalidateDashboardUserCaches } from "@/lib/cache/get-cache-invalidation";
 
 export async function GET() {
   const auth = await requireAuth(["user", "admin"]);
@@ -102,6 +103,8 @@ export async function POST(request) {
         balanceReserved: true,
         balanceReservedAt: new Date(),
         walletAvailableBefore: available,
+        /** false until initiatePayout succeeds; admin UI uses this with balanceRefunded to detect pre-gateway failures. */
+        payoutGatewayQueued: false,
       },
     });
   } catch (e) {
@@ -133,6 +136,7 @@ export async function POST(request) {
         balanceReserved: true,
         balanceRefunded: true,
         balanceRefundedAt: new Date(),
+        payoutGatewayQueued: false,
       },
     });
     return fail("Zetupay credentials missing", 500);
@@ -161,10 +165,19 @@ export async function POST(request) {
         balanceReserved: true,
         balanceRefunded: true,
         balanceRefundedAt: new Date(),
+        payoutGatewayQueued: false,
       },
     });
     return fail(result.error || "Payout request failed", 400);
   }
+  await Withdrawal.findByIdAndUpdate(withdrawal._id, {
+    $set: {
+      "metadata.payoutGatewayQueued": true,
+      "metadata.payoutGatewayQueuedAt": new Date(),
+    },
+  });
+  invalidateDashboardUserCaches(auth.payload.sub);
+  invalidateAdminCaches();
   return ok({
     message: "Payout initiated",
     withdrawalId: withdrawal._id.toString(),

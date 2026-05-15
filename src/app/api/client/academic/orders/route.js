@@ -12,17 +12,27 @@ async function assertClientServicesEnabled() {
   return Boolean(enabled);
 }
 
-export async function GET() {
+export async function GET(request) {
   const auth = await requireAuth(["client"]);
   if (auth.error) return auth.error;
   await connectDB();
   if (!(await assertClientServicesEnabled())) return fail("Client services are currently disabled", 403);
 
-  const data = await ClientOrder.find({ clientUserId: auth.payload.sub, module: "academic" })
-    .sort({ createdAt: -1 })
-    .populate({ path: "moduleItemId", select: "title status approvalStatus metadata pricingSnapshot" })
-    .lean();
-  return ok({ data });
+  const { searchParams } = new URL(request.url);
+  const page = Math.max(1, Number(searchParams.get("page") || 1));
+  const pageSize = Math.min(50, Math.max(1, Number(searchParams.get("pageSize") || 50)));
+
+  const filter = { clientUserId: auth.payload.sub, module: "academic" };
+  const [total, data] = await Promise.all([
+    ClientOrder.countDocuments(filter),
+    ClientOrder.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
+      .populate({ path: "moduleItemId", select: "title status approvalStatus metadata pricingSnapshot" })
+      .lean(),
+  ]);
+  return ok({ data, total, page, pageSize });
 }
 
 export async function POST(request) {

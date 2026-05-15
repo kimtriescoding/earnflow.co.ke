@@ -6,11 +6,11 @@ import { ok, fail } from "@/lib/api";
 import {
   adminVideoItemBaseFilter,
   blockingVideoWatchItemIdsForUser,
-  countDistinctVideoWatchEarners,
   filterItemsByTimeWindow,
   maxParticipantsCap,
   slotsRemainingForItem,
 } from "@/lib/modules/video";
+import { countDistinctParticipantsByItemIds } from "@/lib/modules/participant-counts";
 
 export async function GET() {
   const auth = await requireAuth(["user", "admin"]);
@@ -26,11 +26,19 @@ export async function GET() {
   const open = filterItemsByTimeWindow(rows, now);
 
   const isEndUser = auth.payload.role === "user";
-  const blockingItemIds = isEndUser ? await blockingVideoWatchItemIdsForUser(auth.payload.sub, open.map((i) => i._id)) : new Set();
+  const blockingItemIds = isEndUser
+    ? await blockingVideoWatchItemIdsForUser(auth.payload.sub, open.map((i) => i._id))
+    : new Set();
+
+  const filledByItem = await countDistinctParticipantsByItemIds(
+    "video",
+    "watch",
+    open.map((item) => item._id)
+  );
 
   const data = [];
   for (const item of open) {
-    const filled = await countDistinctVideoWatchEarners(item._id);
+    const filled = filledByItem.get(String(item._id)) || 0;
     const slotsRemaining = slotsRemainingForItem(item, filled);
     const cap = maxParticipantsCap(item.metadata || {});
     if (cap > 0 && slotsRemaining === 0) continue;

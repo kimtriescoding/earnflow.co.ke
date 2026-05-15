@@ -6,6 +6,7 @@ import EarningEvent from "@/models/EarningEvent";
 import { loadReferralCommissionRules } from "@/lib/referrals/commission-config";
 import ModuleInteraction from "@/models/ModuleInteraction";
 import User from "@/models/User";
+import { invalidateDashboardUserCaches } from "@/lib/cache/get-cache-invalidation";
 
 async function persistApprovedEarning(event, user, actorId, session) {
   const opts = session ? { session } : {};
@@ -84,6 +85,7 @@ export async function approveEarningEvent({ eventId, actorId }) {
       },
     }
   );
+  invalidateDashboardUserCaches(String(event.userId));
   return { success: true };
 }
 

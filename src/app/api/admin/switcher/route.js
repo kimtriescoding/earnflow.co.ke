@@ -7,6 +7,8 @@ import { isSuperadminRole } from "@/lib/auth/roles";
 import { REALITY_SWITCH_KEYS, getPaymentRealSwitches, invalidatePaymentRealSwitchCache } from "@/lib/payments/reality-switch";
 import { DASHBOARD_EARNINGS_TIMEZONE } from "@/lib/config/dashboard-timezone";
 import { mongoMatchSameCalendarDayToday } from "@/lib/datetime/mongo-same-day-today";
+import { ADMIN_SWITCHER_CACHE, invalidateAdminCaches } from "@/lib/cache/get-cache-invalidation";
+import { createGetTimer, withPrivateCacheControl } from "@/lib/observability/get-timing";
 
 const FALSE_REAL_TYPES = ["activation_fee", "aviator_topup_checkout", "lucky_spin_topup_checkout"];
 
@@ -16,9 +18,15 @@ function toBool(value, fallback) {
 }
 
 export async function GET() {
+  const timer = createGetTimer("api_admin_switcher");
   const auth = await requireAuth(["admin"]);
   if (auth.error) return auth.error;
   if (!isSuperadminRole(auth.payload.role)) return fail("Not found", 404);
+  const cached = ADMIN_SWITCHER_CACHE.get("global");
+  if (cached) {
+    timer.markCacheHit();
+    return timer.finish(withPrivateCacheControl(ok({ data: cached }), 8));
+  }
   await connectDB();
 
   const [switches, falseRealAgg] = await Promise.all([
@@ -39,14 +47,14 @@ export async function GET() {
     return acc;
   }, {});
 
-  return ok({
-    data: {
-      switches,
-      tallies,
-      talliesScope: "today",
-      talliesTimeZone: DASHBOARD_EARNINGS_TIMEZONE,
-    },
-  });
+  const data = {
+    switches,
+    tallies,
+    talliesScope: "today",
+    talliesTimeZone: DASHBOARD_EARNINGS_TIMEZONE,
+  };
+  ADMIN_SWITCHER_CACHE.set("global", data);
+  return timer.finish(withPrivateCacheControl(ok({ data }), 8));
 }
 
 export async function POST(request) {
@@ -79,6 +87,8 @@ export async function POST(request) {
     ),
   ]);
   invalidatePaymentRealSwitchCache();
+  invalidateAdminCaches();
+  ADMIN_SWITCHER_CACHE.delete("global");
 
   return ok({ message: "Switcher updated", data: { switches: next } });
 }

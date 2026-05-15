@@ -40,7 +40,7 @@ export default function AviatorPage() {
   const enginePhaseRef = useRef("betting");
 
   async function loadProfilePhone() {
-    const res = await fetch("/api/auth/me");
+    const res = await fetch("/api/auth/me?lite=1");
     const data = await res.json();
     if (!data.success) return;
     const profilePhone = String(data.data?.phoneNumber || "").trim();

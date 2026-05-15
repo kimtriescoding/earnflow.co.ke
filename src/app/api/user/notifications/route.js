@@ -3,6 +3,8 @@ import UserNotification from "@/models/UserNotification";
 import { requireAuth } from "@/lib/auth/guards";
 import { ok, fail } from "@/lib/api";
 import mongoose from "mongoose";
+import { NOTIFICATIONS_CACHE, invalidateNotifications } from "@/lib/cache/get-cache-invalidation";
+import { createGetTimer, withPrivateCacheControl } from "@/lib/observability/get-timing";
 
 function serialize(doc) {
   return {
@@ -18,11 +20,18 @@ function serialize(doc) {
 }
 
 export async function GET(request) {
+  const timer = createGetTimer("api_user_notifications");
   const auth = await requireAuth(["user", "admin"]);
   if (auth.error) return auth.error;
   const userId = auth.payload.sub;
   const { searchParams } = new URL(request.url);
   const limit = Math.min(50, Math.max(1, Number(searchParams.get("limit")) || 30));
+  const cacheKey = `${userId}|${limit}`;
+  const cached = NOTIFICATIONS_CACHE.get(cacheKey);
+  if (cached) {
+    timer.markCacheHit();
+    return timer.finish(withPrivateCacheControl(ok({ data: cached }), 12));
+  }
 
   await connectDB();
   const uid = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
@@ -31,12 +40,12 @@ export async function GET(request) {
     UserNotification.countDocuments({ userId: uid, read: false }),
   ]);
 
-  return ok({
-    data: {
-      items: items.map(serialize),
-      unreadCount,
-    },
-  });
+  const data = {
+    items: items.map(serialize),
+    unreadCount,
+  };
+  NOTIFICATIONS_CACHE.set(cacheKey, data);
+  return timer.finish(withPrivateCacheControl(ok({ data }), 12));
 }
 
 export async function PATCH(request) {
@@ -56,6 +65,7 @@ export async function PATCH(request) {
 
   if (body?.markAll === true) {
     const res = await UserNotification.updateMany({ userId: uid, read: false }, { $set: { read: true, readAt: now } });
+    invalidateNotifications(userId);
     return ok({ data: { modified: res.modifiedCount } });
   }
 
@@ -69,5 +79,6 @@ export async function PATCH(request) {
     { userId: uid, _id: { $in: oids }, read: false },
     { $set: { read: true, readAt: now } }
   );
+  invalidateNotifications(userId);
   return ok({ data: { modified: res.modifiedCount } });
 }

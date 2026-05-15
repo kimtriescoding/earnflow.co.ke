@@ -5,25 +5,42 @@ import { submitEarningEvent } from "@/lib/ledger/earnings";
 import { logModuleInteraction } from "@/lib/modules/interactions";
 import { fail, ok } from "@/lib/api";
 import { creditLuckySpinWallet, debitLuckySpinWallet, getOrCreateLuckySpinWallet } from "@/lib/lucky-spin/wallet";
+import { SPIN_CONFIG_CACHE, invalidateDashboardUserCaches } from "@/lib/cache/get-cache-invalidation";
+import { createGetTimer, withPrivateCacheControl } from "@/lib/observability/get-timing";
 
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
 export async function GET() {
+  const timer = createGetTimer("api_spin");
   const auth = await requireAuth(["user", "admin"]);
   if (auth.error) return auth.error;
-  const moduleStatus = await getSetting("module_status", {});
-  const defaults = await getSetting("module_lucky_spin_default", {});
-  const wallet = await getOrCreateLuckySpinWallet(auth.payload.sub);
-  return ok({
-    data: {
+  let configSlice = SPIN_CONFIG_CACHE.get("global");
+  if (!configSlice) {
+    const moduleStatus = await getSetting("module_status", {});
+    const defaults = await getSetting("module_lucky_spin_default", {});
+    configSlice = {
       enabled: isModuleEnabled(moduleStatus, "lucky_spin"),
       segmentCount: Number(defaults?.segmentCount || 6),
       minBetAmount: Number(defaults?.minBetAmount || 10),
-      balance: Number(wallet.balance || 0),
-    },
-  });
+    };
+    SPIN_CONFIG_CACHE.set("global", configSlice);
+  } else {
+    timer.markCacheHit();
+  }
+  const wallet = await getOrCreateLuckySpinWallet(auth.payload.sub);
+  return timer.finish(
+    withPrivateCacheControl(
+      ok({
+        data: {
+          ...configSlice,
+          balance: Number(wallet.balance || 0),
+        },
+      }),
+      2
+    )
+  );
 }
 
 export async function POST(request) {
@@ -62,7 +79,6 @@ export async function POST(request) {
     });
   }
 
-  /** Main-wallet EarningEvents are for real credits only; losses stay in ModuleInteraction + Lucky Spin ledger. */
   const event =
     payout > 0
       ? await submitEarningEvent({
@@ -90,6 +106,7 @@ export async function POST(request) {
     earningEventId: event?._id || null,
     metadata: { multiplier, landedSegment, betAmount, payout, segmentCount, result: isWin ? "win" : "loss" },
   });
+  invalidateDashboardUserCaches(auth.payload.sub);
   const wallet = await getOrCreateLuckySpinWallet(auth.payload.sub);
   return ok({
     data: {

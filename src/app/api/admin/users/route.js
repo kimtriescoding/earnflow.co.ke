@@ -153,6 +153,8 @@ export async function GET(request) {
       withdrawableBalance: Number(doc.withdrawableBalance || 0),
     }));
   } else {
+    const includeTotal =
+      searchParams.get("includeTotal") === "1" || searchParams.get("includeTotal") === "true";
     const [users, sumKes] = await Promise.all([
       User.find(userFilter)
         .select("-passwordHash")
@@ -160,7 +162,7 @@ export async function GET(request) {
         .skip((page - 1) * pageSize)
         .limit(pageSize)
         .lean(),
-      aggregateTotalWithdrawableKes(userFilter),
+      includeTotal ? aggregateTotalWithdrawableKes(userFilter) : Promise.resolve(0),
     ]);
     totalWithdrawableKes = sumKes;
     const walletMap = new Map(

@@ -7,8 +7,11 @@ import { requireAuth } from "@/lib/auth/guards";
 import { ok, fail } from "@/lib/api";
 import { creditWithdrawalRefundIfAbsent, withdrawalRefundTransactionExists } from "@/lib/payments/withdrawal-refund";
 import { logInfo } from "@/lib/observability/logger";
+import { ADMIN_WITHDRAWALS_CACHE, invalidateAdminCaches, invalidateDashboardUserCaches } from "@/lib/cache/get-cache-invalidation";
+import { createGetTimer, withPrivateCacheControl } from "@/lib/observability/get-timing";
 
 export async function GET(request) {
+  const timer = createGetTimer("api_admin_withdrawals");
   const auth = await requireAuth(["admin", "support"]);
   if (auth.error) return auth.error;
   await connectDB();
@@ -17,6 +20,12 @@ export async function GET(request) {
   const pageSize = Math.min(100, Number(searchParams.get("pageSize") || 20));
   const status = String(searchParams.get("status") || "").trim();
   const sortDir = searchParams.get("sortDir") === "asc" ? 1 : -1;
+  const cacheKey = `${status}|${page}|${pageSize}|${sortDir}`;
+  const cached = ADMIN_WITHDRAWALS_CACHE.get(cacheKey);
+  if (cached) {
+    timer.markCacheHit();
+    return timer.finish(withPrivateCacheControl(ok(cached), 30));
+  }
 
   const filter = status ? { status } : {};
   const [total, withdrawals] = await Promise.all([
@@ -42,7 +51,9 @@ export async function GET(request) {
     user: userMap.get(String(w.userId)) || null,
     hasRefundTransaction: refundedSet.has(String(w._id)),
   }));
-  return ok({ data, total, page, pageSize });
+  const payload = { data, total, page, pageSize };
+  ADMIN_WITHDRAWALS_CACHE.set(cacheKey, payload);
+  return timer.finish(withPrivateCacheControl(ok(payload), 30));
 }
 
 export async function PATCH(request) {
@@ -63,6 +74,15 @@ export async function PATCH(request) {
     }
     if (await withdrawalRefundTransactionExists(withdrawal._id)) {
       return fail("A refund transaction already exists for this withdrawal", 409);
+    }
+    if (
+      withdrawal.metadata?.balanceRefunded === true &&
+      withdrawal.metadata?.payoutGatewayQueued === false
+    ) {
+      return fail(
+        "This withdrawal never reached the payout gateway; the wallet was rolled back when initiation failed. Manual refund does not apply.",
+        400
+      );
     }
     if (withdrawal.metadata?.noRefundLedgerAcknowledged) {
       return ok({ message: "Ledger was already verified for this withdrawal.", alreadyAcknowledged: true });
@@ -95,6 +115,15 @@ export async function PATCH(request) {
     if (await withdrawalRefundTransactionExists(withdrawal._id)) {
       return fail("A refund transaction already exists for this withdrawal", 409);
     }
+    if (
+      withdrawal.metadata?.balanceRefunded === true &&
+      withdrawal.metadata?.payoutGatewayQueued === false
+    ) {
+      return fail(
+        "This withdrawal never reached the payout gateway; the wallet was rolled back. No wallet credit is required.",
+        400
+      );
+    }
     const plain = withdrawal.toObject({ flattenMaps: true });
     const r = await creditWithdrawalRefundIfAbsent(plain, {
       skipReservationGate: true,
@@ -115,10 +144,18 @@ export async function PATCH(request) {
       userId: String(withdrawal.userId),
       totalCredited,
     });
+    invalidateAdminCaches();
+    invalidateDashboardUserCaches(String(withdrawal.userId));
     return ok({ message: "Refund issued to wallet", totalCredited });
   }
 
   if (!body?.status) return fail("withdrawalId and status required");
-  await Withdrawal.findByIdAndUpdate(body.withdrawalId, { status: body.status, notes: body.notes || "" });
+  const updated = await Withdrawal.findByIdAndUpdate(
+    body.withdrawalId,
+    { status: body.status, notes: body.notes || "" },
+    { returnDocument: "after" }
+  );
+  invalidateAdminCaches();
+  if (updated?.userId) invalidateDashboardUserCaches(String(updated.userId));
   return ok({ message: "Withdrawal updated" });
 }

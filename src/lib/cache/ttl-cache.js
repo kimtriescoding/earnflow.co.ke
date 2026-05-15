@@ -24,5 +24,15 @@ export function createTtlCache(namespace, ttlMs) {
     delete(key) {
       store.delete(key);
     },
+    deleteByPrefix(prefix) {
+      const p = String(prefix || "");
+      if (!p) return;
+      for (const key of store.keys()) {
+        if (String(key).startsWith(p)) store.delete(key);
+      }
+    },
+    clear() {
+      store.clear();
+    },
   };
 }

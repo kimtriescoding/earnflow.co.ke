@@ -4,6 +4,23 @@ import ReferralCommission from "@/models/ReferralCommission";
 import { requireAuth } from "@/lib/auth/guards";
 import { ok } from "@/lib/api";
 
+async function aggregateTotalCommissionsForUserFilter(userFilter) {
+  const [row] = await User.aggregate([
+    { $match: userFilter },
+    {
+      $lookup: {
+        from: ReferralCommission.collection.name,
+        localField: "_id",
+        foreignField: "beneficiaryUserId",
+        as: "_commissions",
+      },
+    },
+    { $unwind: { path: "$_commissions", preserveNullAndEmptyArrays: true } },
+    { $group: { _id: null, total: { $sum: { $ifNull: ["$_commissions.amount", 0] } } } },
+  ]);
+  return Number(row?.total || 0);
+}
+
 export async function GET(request) {
   const auth = await requireAuth(["admin", "support"]);
   if (auth.error) return auth.error;
@@ -17,27 +34,23 @@ export async function GET(request) {
     ? { $or: [{ username: { $regex: search, $options: "i" } }, { email: { $regex: search, $options: "i" } }] }
     : {};
 
-  const [users, totalUsers, linkedL1, linkedL2, linkedL3, matchingUserIds] = await Promise.all([
-    User.find(userFilter).select("username email referredByUserId uplineL1UserId uplineL2UserId uplineL3UserId").sort({ createdAt: -1 }).skip((page - 1) * pageSize).limit(pageSize).lean(),
+  const [users, totalUsers, linkedL1, linkedL2, linkedL3, totalCommissions] = await Promise.all([
+    User.find(userFilter)
+      .select("username email referredByUserId uplineL1UserId uplineL2UserId uplineL3UserId")
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
+      .lean(),
     User.countDocuments(userFilter),
     User.countDocuments({ ...userFilter, referredByUserId: { $exists: true, $ne: null } }),
     User.countDocuments({ ...userFilter, uplineL2UserId: { $exists: true, $ne: null } }),
     User.countDocuments({ ...userFilter, uplineL3UserId: { $exists: true, $ne: null } }),
-    User.find(userFilter).select("_id").lean(),
+    aggregateTotalCommissionsForUserFilter(userFilter),
   ]);
 
-  const ids = matchingUserIds.map((u) => u._id);
-  const [pageCommissionRows, commissionTotals] = await Promise.all([
-    ReferralCommission.aggregate([
-      { $match: { beneficiaryUserId: { $in: users.map((u) => u._id) } } },
-      { $group: { _id: "$beneficiaryUserId", total: { $sum: "$amount" } } },
-    ]),
-    ids.length
-      ? ReferralCommission.aggregate([
-          { $match: { beneficiaryUserId: { $in: ids } } },
-          { $group: { _id: null, total: { $sum: "$amount" } } },
-        ])
-      : [],
+  const pageCommissionRows = await ReferralCommission.aggregate([
+    { $match: { beneficiaryUserId: { $in: users.map((u) => u._id) } } },
+    { $group: { _id: "$beneficiaryUserId", total: { $sum: "$amount" } } },
   ]);
   const commissionMap = new Map(pageCommissionRows.map((row) => [String(row._id), Number(row.total || 0)]));
 
@@ -77,7 +90,7 @@ export async function GET(request) {
       linkedL1,
       linkedL2,
       linkedL3,
-      totalCommissions: Number(commissionTotals[0]?.total || 0),
+      totalCommissions: Number(totalCommissions.toFixed(2)),
     },
   });
 }

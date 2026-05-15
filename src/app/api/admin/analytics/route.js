@@ -14,6 +14,8 @@ import {
   rangeBoundsUtc,
 } from "@/lib/datetime/zoned-range";
 import { MATCH_METADATA_REAL_FOR_REVENUE } from "@/lib/payments/transaction-real";
+import { ADMIN_ANALYTICS_ALLTIME_CACHE, ADMIN_ANALYTICS_RANGE_CACHE } from "@/lib/cache/get-cache-invalidation";
+import { createGetTimer, withPrivateCacheControl } from "@/lib/observability/get-timing";
 
 const TZ = DASHBOARD_EARNINGS_TIMEZONE;
 
@@ -58,7 +60,50 @@ function resolveRangeFromRequest(url) {
   return { ok: true, fromYmd: fromQ, toYmd: toQ };
 }
 
+async function loadAllTimeTotals() {
+  const cached = ADMIN_ANALYTICS_ALLTIME_CACHE.get("global");
+  if (cached) return cached;
+  await connectDB();
+  const [allTimeActivationAgg, allTimeCommissionAgg, allTimeWithdrawalAgg] = await Promise.all([
+    ActivationPayment.aggregate(
+      [
+        {
+          $match: {
+            status: "success",
+            ...MATCH_METADATA_REAL_FOR_REVENUE,
+          },
+        },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ],
+      aggOpts
+    ),
+    ReferralCommission.aggregate([{ $group: { _id: null, total: { $sum: "$amount" } } }], aggOpts),
+    Withdrawal.aggregate(
+      [
+        { $match: { status: "completed" } },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: { $add: [{ $ifNull: ["$amount", 0] }, { $ifNull: ["$fee", 0] }] } },
+          },
+        },
+      ],
+      aggOpts
+    ),
+  ]);
+  const allTimeCashIn = Number(allTimeActivationAgg?.[0]?.total || 0);
+  const allTimeCashOut = Number(allTimeCommissionAgg?.[0]?.total || 0) + Number(allTimeWithdrawalAgg?.[0]?.total || 0);
+  const payload = {
+    allTimeCashIn: Number(allTimeCashIn.toFixed(2)),
+    allTimeCashOut: Number(allTimeCashOut.toFixed(2)),
+    allTimeNet: Number((allTimeCashIn - allTimeCashOut).toFixed(2)),
+  };
+  ADMIN_ANALYTICS_ALLTIME_CACHE.set("global", payload);
+  return payload;
+}
+
 export async function GET(request) {
+  const timer = createGetTimer("api_admin_analytics");
   const auth = await requireAuth(["admin", "support"]);
   if (auth.error) return auth.error;
 
@@ -66,12 +111,24 @@ export async function GET(request) {
   if (!resolved.ok) return fail(resolved.error, 400);
 
   const { fromYmd, toYmd } = resolved;
+  const rangeCacheKey = `${fromYmd}|${toYmd}`;
+  const cachedRange = ADMIN_ANALYTICS_RANGE_CACHE.get(rangeCacheKey);
+  const cachedAllTime = ADMIN_ANALYTICS_ALLTIME_CACHE.get("global");
+  if (cachedRange && cachedAllTime) {
+    timer.markCacheHit();
+    const data = {
+      ...cachedRange,
+      summary: { ...cachedRange.summary, ...cachedAllTime },
+    };
+    return timer.finish(withPrivateCacheControl(ok({ data }), 60));
+  }
+
   await connectDB();
 
   const dayKeys = enumerateInclusiveDays(fromYmd, toYmd);
   const { start, endExclusive } = rangeBoundsUtc(fromYmd, toYmd, TZ);
 
-  const [signupsAgg, activationAgg, commissionAgg, withdrawalAgg, allTimeActivationAgg, allTimeCommissionAgg, allTimeWithdrawalAgg] = await Promise.all([
+  const [signupsAgg, activationAgg, commissionAgg, withdrawalAgg, allTimeTotals] = await Promise.all([
     User.aggregate([
       { $match: { createdAt: { $gte: start, $lt: endExclusive }, role: { $in: ["user", "client"] } } },
       {
@@ -142,31 +199,7 @@ export async function GET(request) {
         },
       },
     ], aggOpts),
-    ActivationPayment.aggregate(
-      [
-        {
-          $match: {
-            status: "success",
-            ...MATCH_METADATA_REAL_FOR_REVENUE,
-          },
-        },
-        { $group: { _id: null, total: { $sum: "$amount" } } },
-      ],
-      aggOpts
-    ),
-    ReferralCommission.aggregate([{ $group: { _id: null, total: { $sum: "$amount" } } }], aggOpts),
-    Withdrawal.aggregate(
-      [
-        { $match: { status: "completed" } },
-        {
-          $group: {
-            _id: null,
-            total: { $sum: { $add: [{ $ifNull: ["$amount", 0] }, { $ifNull: ["$fee", 0] }] } },
-          },
-        },
-      ],
-      aggOpts
-    ),
+    loadAllTimeTotals(),
   ]);
 
   const signupMap = new Map(signupsAgg.map((r) => [r._id, r.c]));
@@ -202,38 +235,37 @@ export async function GET(request) {
   const totalCommissionsPaid = series.reduce((s, x) => s + x.commissions, 0);
   const totalWithdrawalsPaid = series.reduce((s, x) => s + x.withdrawals, 0);
   const totalOutflow = series.reduce((s, x) => s + x.outflow, 0);
-  const allTimeCashIn = Number(allTimeActivationAgg?.[0]?.total || 0);
-  const allTimeCashOut = Number(allTimeCommissionAgg?.[0]?.total || 0) + Number(allTimeWithdrawalAgg?.[0]?.total || 0);
-
   /** Pie: outflows only so slice % = share of money leaving (commissions vs withdrawals). */
   const sourceBreakdown = [
     { name: "Referral commissions", value: Number(totalCommissionsPaid.toFixed(2)) },
     { name: "Withdrawals (incl. fees)", value: Number(totalWithdrawalsPaid.toFixed(2)) },
   ];
 
-  return ok({
-    data: {
-      series,
-      sourceBreakdown,
-      statsTimeZone: TZ,
-      range: {
-        from: fromYmd,
-        to: toYmd,
-        days: dayKeys.length,
-        maxDays: MAX_RANGE_DAYS,
-      },
-      summary: {
-        totalSignups,
-        totalActivationRevenue: Number(totalActivationRevenue.toFixed(2)),
-        totalCommissionsPaid: Number(totalCommissionsPaid.toFixed(2)),
-        totalWithdrawalsPaid: Number(totalWithdrawalsPaid.toFixed(2)),
-        totalOutflow: Number(totalOutflow.toFixed(2)),
-        netFlow: Number((totalActivationRevenue - totalOutflow).toFixed(2)),
-        netActivationsMinusCommissions: Number((totalActivationRevenue - totalCommissionsPaid).toFixed(2)),
-        allTimeCashIn: Number(allTimeCashIn.toFixed(2)),
-        allTimeCashOut: Number(allTimeCashOut.toFixed(2)),
-        allTimeNet: Number((allTimeCashIn - allTimeCashOut).toFixed(2)),
-      },
+  const rangePayload = {
+    series,
+    sourceBreakdown,
+    statsTimeZone: TZ,
+    range: {
+      from: fromYmd,
+      to: toYmd,
+      days: dayKeys.length,
+      maxDays: MAX_RANGE_DAYS,
     },
-  });
+    summary: {
+      totalSignups,
+      totalActivationRevenue: Number(totalActivationRevenue.toFixed(2)),
+      totalCommissionsPaid: Number(totalCommissionsPaid.toFixed(2)),
+      totalWithdrawalsPaid: Number(totalWithdrawalsPaid.toFixed(2)),
+      totalOutflow: Number(totalOutflow.toFixed(2)),
+      netFlow: Number((totalActivationRevenue - totalOutflow).toFixed(2)),
+      netActivationsMinusCommissions: Number((totalActivationRevenue - totalCommissionsPaid).toFixed(2)),
+    },
+  };
+  ADMIN_ANALYTICS_RANGE_CACHE.set(rangeCacheKey, rangePayload);
+
+  const data = {
+    ...rangePayload,
+    summary: { ...rangePayload.summary, ...allTimeTotals },
+  };
+  return timer.finish(withPrivateCacheControl(ok({ data }), 60));
 }
