@@ -33,17 +33,17 @@ export async function GET(request) {
     Withdrawal.find(filter).sort({ createdAt: sortDir }).skip((page - 1) * pageSize).limit(pageSize).lean(),
   ]);
 
-  const users = await User.find({ _id: { $in: withdrawals.map((item) => item.userId) } }).select("username email").lean();
-  const userMap = new Map(users.map((u) => [String(u._id), u]));
-
   const withdrawalIds = withdrawals.map((w) => w._id).filter(Boolean);
-  const refundedIds =
+  const [users, refundedIds] = await Promise.all([
+    User.find({ _id: { $in: withdrawals.map((item) => item.userId) } }).select("username email").lean(),
     withdrawalIds.length === 0
-      ? []
-      : await Transaction.distinct("metadata.withdrawalId", {
+      ? Promise.resolve([])
+      : Transaction.distinct("metadata.withdrawalId", {
           type: "refund",
           "metadata.withdrawalId": { $in: withdrawalIds },
-        });
+        }),
+  ]);
+  const userMap = new Map(users.map((u) => [String(u._id), u]));
   const refundedSet = new Set(refundedIds.map((id) => String(id)));
 
   const data = withdrawals.map((w) => ({

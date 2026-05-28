@@ -11,6 +11,11 @@ export const ADMIN_ANALYTICS_ALLTIME_CACHE = createTtlCache("admin-analytics-all
 export const ADMIN_SUMMARY_CACHE = createTtlCache("admin-summary", 90_000);
 export const ADMIN_WITHDRAWALS_CACHE = createTtlCache("admin-withdrawals", 30_000);
 export const ADMIN_SWITCHER_CACHE = createTtlCache("admin-switcher", 8_000);
+export const ADMIN_PAYMENTS_CACHE = createTtlCache("admin-payments", 30_000);
+export const ADMIN_REFERRALS_CACHE = createTtlCache("admin-referrals", 30_000);
+export const ADMIN_USERS_CACHE = createTtlCache("admin-users", 20_000);
+export const ADMIN_LEADERBOARDS_CACHE = createTtlCache("admin-leaderboards", 60_000);
+export const ADMIN_CONFIG_CACHE = createTtlCache("admin-config", 30_000);
 export const NOTIFICATIONS_CACHE = createTtlCache("user-notifications", 12_000);
 export const SPIN_CONFIG_CACHE = createTtlCache("spin-config", 2_000);
 
@@ -29,6 +34,18 @@ export function invalidateAdminCaches() {
   ADMIN_ANALYTICS_ALLTIME_CACHE.delete("global");
   ADMIN_ANALYTICS_RANGE_CACHE.clear();
   ADMIN_WITHDRAWALS_CACHE.clear();
+  ADMIN_PAYMENTS_CACHE.clear();
+  ADMIN_REFERRALS_CACHE.clear();
+  ADMIN_USERS_CACHE.clear();
+  ADMIN_LEADERBOARDS_CACHE.clear();
+}
+
+export function invalidateAdminConfigCache() {
+  ADMIN_CONFIG_CACHE.clear();
+}
+
+export function invalidateAdminUsersCache() {
+  ADMIN_USERS_CACHE.clear();
 }
 
 export function invalidateAdminWithdrawalsListCaches() {

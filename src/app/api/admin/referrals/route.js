@@ -3,20 +3,27 @@ import User from "@/models/User";
 import ReferralCommission from "@/models/ReferralCommission";
 import { requireAuth } from "@/lib/auth/guards";
 import { ok } from "@/lib/api";
+import { ADMIN_REFERRALS_CACHE } from "@/lib/cache/get-cache-invalidation";
 
+/**
+ * Sum of all referral commissions for the users matched by `userFilter`.
+ * Avoids the full user x commission $lookup by grouping commissions directly:
+ * - no search -> group every commission once,
+ * - search -> resolve matching user ids, then match beneficiaryUserId via the indexed field.
+ */
 async function aggregateTotalCommissionsForUserFilter(userFilter) {
-  const [row] = await User.aggregate([
-    { $match: userFilter },
-    {
-      $lookup: {
-        from: ReferralCommission.collection.name,
-        localField: "_id",
-        foreignField: "beneficiaryUserId",
-        as: "_commissions",
-      },
-    },
-    { $unwind: { path: "$_commissions", preserveNullAndEmptyArrays: true } },
-    { $group: { _id: null, total: { $sum: { $ifNull: ["$_commissions.amount", 0] } } } },
+  const hasFilter = userFilter && Object.keys(userFilter).length > 0;
+  if (hasFilter) {
+    const matchedUserIds = (await User.find(userFilter).select("_id").lean()).map((u) => u._id);
+    if (!matchedUserIds.length) return 0;
+    const [row] = await ReferralCommission.aggregate([
+      { $match: { beneficiaryUserId: { $in: matchedUserIds } } },
+      { $group: { _id: null, total: { $sum: { $ifNull: ["$amount", 0] } } } },
+    ]);
+    return Number(row?.total || 0);
+  }
+  const [row] = await ReferralCommission.aggregate([
+    { $group: { _id: null, total: { $sum: { $ifNull: ["$amount", 0] } } } },
   ]);
   return Number(row?.total || 0);
 }
@@ -24,11 +31,16 @@ async function aggregateTotalCommissionsForUserFilter(userFilter) {
 export async function GET(request) {
   const auth = await requireAuth(["admin", "support"]);
   if (auth.error) return auth.error;
-  await connectDB();
   const { searchParams } = new URL(request.url);
   const page = Number(searchParams.get("page") || 1);
   const pageSize = Math.min(100, Number(searchParams.get("pageSize") || 20));
   const search = String(searchParams.get("search") || "").trim();
+
+  const cacheKey = `${page}|${pageSize}|${search}`;
+  const cached = ADMIN_REFERRALS_CACHE.get(cacheKey);
+  if (cached) return ok(cached);
+
+  await connectDB();
 
   const userFilter = search
     ? { $or: [{ username: { $regex: search, $options: "i" } }, { email: { $regex: search, $options: "i" } }] }
@@ -80,7 +92,7 @@ export async function GET(request) {
     totalReferralCommissions: Number((commissionMap.get(String(u._id)) || 0).toFixed(2)),
   }));
 
-  return ok({
+  const result = {
     data,
     total: totalUsers,
     page,
@@ -92,5 +104,7 @@ export async function GET(request) {
       linkedL3,
       totalCommissions: Number(totalCommissions.toFixed(2)),
     },
-  });
+  };
+  ADMIN_REFERRALS_CACHE.set(cacheKey, result);
+  return ok(result);
 }

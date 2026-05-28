@@ -5,6 +5,7 @@ import { hashPassword } from "@/lib/auth/password";
 import { issueAuthSession } from "@/lib/auth/session";
 import { resolveReferralHierarchy } from "@/lib/referrals/engine";
 import { ok, fail, guardRateLimit, guardBlockedIp } from "@/lib/api";
+import { primeSessionUserCaches } from "@/lib/auth/session-state";
 
 export async function POST(request) {
   const blocked = await guardBlockedIp(request);
@@ -41,6 +42,7 @@ export async function POST(request) {
     passwordHash,
     ...hierarchy,
   });
+  primeSessionUserCaches(user);
   await Promise.all([
     Wallet.create({ userId: user._id }),
     issueAuthSession({

@@ -1,5 +1,8 @@
 const memoryHits = new Map();
 const memoryIpBlocks = new Set();
+/** IPs verified not blocked recently — avoids a DB round-trip on every auth request. */
+const memoryIpClear = new Map();
+const IP_CLEAR_TTL_MS = 5 * 60_000;
 
 function now() {
   return Date.now();
@@ -41,4 +44,21 @@ export function isIpBlockedInMemory(ip) {
 export function setIpBlockedInMemory(ip) {
   if (!ip || ip === "unknown") return;
   memoryIpBlocks.add(ip);
+  memoryIpClear.delete(ip);
+}
+
+export function isIpRecentlyCleared(ip) {
+  if (!ip || ip === "unknown") return false;
+  const expiresAt = memoryIpClear.get(ip);
+  if (!expiresAt) return false;
+  if (expiresAt < now()) {
+    memoryIpClear.delete(ip);
+    return false;
+  }
+  return true;
+}
+
+export function markIpRecentlyCleared(ip) {
+  if (!ip || ip === "unknown") return;
+  memoryIpClear.set(ip, now() + IP_CLEAR_TTL_MS);
 }

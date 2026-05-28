@@ -35,10 +35,19 @@ export async function GET(request) {
     .limit(200)
     .lean();
 
+  const activatedUserIds = new Set(
+    (
+      await User.find({ _id: { $in: rows.map((row) => row.userId) } })
+        .select("_id isActivated")
+        .lean()
+    )
+      .filter((u) => u?.isActivated)
+      .map((u) => String(u._id))
+  );
+
   let replayed = 0;
   for (const row of rows) {
-    const u = await User.findById(row.userId).select("isActivated").lean();
-    if (!u?.isActivated) continue;
+    if (!activatedUserIds.has(String(row.userId))) continue;
     const key = `activation_referral:${row._id}`;
     await ensureOutboxJob({
       type: "activation_referral",

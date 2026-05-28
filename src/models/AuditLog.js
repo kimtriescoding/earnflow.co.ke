@@ -12,4 +12,7 @@ const schema = new mongoose.Schema(
   { timestamps: true }
 );
 
+schema.index({ createdAt: -1 });
+schema.index({ entity: 1, entityId: 1 });
+
 export default getModel("AuditLog", schema);

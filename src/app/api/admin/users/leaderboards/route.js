@@ -3,6 +3,7 @@ import Wallet from "@/models/Wallet";
 import { requireAuth } from "@/lib/auth/guards";
 import { ok } from "@/lib/api";
 import { INTERNAL_ONLY_ROLES, isSuperadminRole } from "@/lib/auth/roles";
+import { ADMIN_LEADERBOARDS_CACHE } from "@/lib/cache/get-cache-invalidation";
 
 function userStagesFor(role) {
   const shouldHideInternal = !isSuperadminRole(role);
@@ -23,6 +24,11 @@ function userStagesFor(role) {
 export async function GET() {
   const auth = await requireAuth(["admin", "support"]);
   if (auth.error) return auth.error;
+
+  const cacheKey = isSuperadminRole(auth.payload.role) ? "superadmin" : "standard";
+  const cached = ADMIN_LEADERBOARDS_CACHE.get(cacheKey);
+  if (cached) return ok({ data: cached });
+
   await connectDB();
 
   const userStages = userStagesFor(auth.payload.role);
@@ -56,7 +62,7 @@ export async function GET() {
     availableBalance: Number(Number(row.availableBalance || 0).toFixed(2)),
   }));
 
-  return ok({
-    data: { topLifetimeEarners, topWithdrawable },
-  });
+  const data = { topLifetimeEarners, topWithdrawable };
+  ADMIN_LEADERBOARDS_CACHE.set(cacheKey, data);
+  return ok({ data });
 }

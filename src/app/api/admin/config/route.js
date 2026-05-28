@@ -7,6 +7,7 @@ import { deleteCache } from "@/lib/cache/config-cache";
 import { sanitizeWithdrawalFeeTiers, normalizeWithdrawalFeeMode } from "@/lib/payments/withdrawal-fees";
 import { isSuperadminRole } from "@/lib/auth/roles";
 import { REALITY_SWITCH_KEYS } from "@/lib/payments/reality-switch";
+import { ADMIN_CONFIG_CACHE, invalidateAdminConfigCache } from "@/lib/cache/get-cache-invalidation";
 
 const SUPERADMIN_ONLY_KEYS = new Set([
   REALITY_SWITCH_KEYS.activation,
@@ -17,9 +18,13 @@ const SUPERADMIN_ONLY_KEYS = new Set([
 export async function GET() {
   const auth = await requireAuth(["admin", "support"]);
   if (auth.error) return auth.error;
+  const includeSuperadminOnly = isSuperadminRole(auth.payload.role);
+  const cacheKey = includeSuperadminOnly ? "superadmin" : "standard";
+  const cached = ADMIN_CONFIG_CACHE.get(cacheKey);
+  if (cached) return ok({ data: cached });
+
   await connectDB();
   const configs = await Settings.find({}).lean();
-  const includeSuperadminOnly = isSuperadminRole(auth.payload.role);
   const sanitized = configs
     .filter((doc) => includeSuperadminOnly || !SUPERADMIN_ONLY_KEYS.has(String(doc.key || "")))
     .map((doc) => {
@@ -29,6 +34,7 @@ export async function GET() {
     }
     return doc;
     });
+  ADMIN_CONFIG_CACHE.set(cacheKey, sanitized);
   return ok({ data: sanitized });
 }
 
@@ -116,5 +122,6 @@ export async function POST(request) {
       deleteCache(`settings:${k}`);
     }
   }
+  invalidateAdminConfigCache();
   return ok({ message: "Configuration updated" });
 }

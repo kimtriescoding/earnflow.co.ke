@@ -5,4 +5,11 @@ export async function register() {
   }
   const mod = await import("./instrumentation/mongoose-shutdown.js");
   mod.registerMongooseShutdown();
+
+  const { default: connectDB } = await import("./lib/db.js");
+  try {
+    await connectDB();
+  } catch (err) {
+    console.error("[instrumentation] DB warmup failed; will connect lazily on first request", err);
+  }
 }

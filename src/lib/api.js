@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
-import { getClientFingerprint, enforceRateLimit, getRequestIp, isIpBlockedInMemory, setIpBlockedInMemory } from "./fraud/guards";
+import {
+  getClientFingerprint,
+  enforceRateLimit,
+  getRequestIp,
+  isIpBlockedInMemory,
+  isIpRecentlyCleared,
+  markIpRecentlyCleared,
+  setIpBlockedInMemory,
+} from "./fraud/guards";
 import connectDB from "./db";
 import BlockedIp from "@/models/BlockedIp";
 import { logError } from "./observability/logger";
@@ -25,10 +33,14 @@ export async function guardBlockedIp(request) {
   const ip = getRequestIp(request.headers);
   if (!ip || ip === "unknown") return null;
   if (isIpBlockedInMemory(ip)) return fail("Access denied", 403);
+  if (isIpRecentlyCleared(ip)) return null;
   try {
     await connectDB();
     const blocked = await BlockedIp.findOne({ ip, active: true }).select("_id").lean();
-    if (!blocked) return null;
+    if (!blocked) {
+      markIpRecentlyCleared(ip);
+      return null;
+    }
     setIpBlockedInMemory(ip);
     return fail("Access denied", 403);
   } catch {

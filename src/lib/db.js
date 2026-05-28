@@ -30,7 +30,7 @@ function optionalPositiveInt(name, fallback) {
 
 function buildMongoClientOptions() {
   const maxPoolSize = optionalPositiveInt("MONGODB_MAX_POOL_SIZE", 50);
-  const minPoolSize = Math.min(optionalPositiveInt("MONGODB_MIN_POOL_SIZE", 0), maxPoolSize);
+  const minPoolSize = Math.min(optionalPositiveInt("MONGODB_MIN_POOL_SIZE", 5), maxPoolSize);
 
   return {
     maxPoolSize,

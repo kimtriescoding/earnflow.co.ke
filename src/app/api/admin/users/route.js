@@ -6,6 +6,7 @@ import { requireAuth } from "@/lib/auth/guards";
 import { ok, fail } from "@/lib/api";
 import { Types } from "mongoose";
 import { ADMIN_MANAGEABLE_ROLES, INTERNAL_ONLY_ROLES, isSuperadminRole } from "@/lib/auth/roles";
+import { ADMIN_USERS_CACHE, invalidateAdminUsersCache } from "@/lib/cache/get-cache-invalidation";
 
 function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -86,8 +87,13 @@ async function aggregateTotalWithdrawableKes(userFilter) {
 export async function GET(request) {
   const auth = await requireAuth(["admin", "support"]);
   if (auth.error) return auth.error;
-  await connectDB();
   const { searchParams } = new URL(request.url);
+  const roleScope = isSuperadminRole(auth.payload.role) ? "superadmin" : "standard";
+  const cacheKey = `${roleScope}|${searchParams.toString()}`;
+  const cachedResult = ADMIN_USERS_CACHE.get(cacheKey);
+  if (cachedResult) return ok(cachedResult);
+
+  await connectDB();
   const page = Math.max(1, Number(searchParams.get("page") || 1));
   const pageSize = Number(searchParams.get("pageSize") || 20);
   const search = String(searchParams.get("search") || searchParams.get("q") || "").trim();
@@ -180,7 +186,7 @@ export async function GET(request) {
     }));
   }
 
-  return ok({
+  const result = {
     data,
     total,
     page,
@@ -192,7 +198,9 @@ export async function GET(request) {
       totalWithdrawableKes,
       minWithdrawalAmount,
     },
-  });
+  };
+  ADMIN_USERS_CACHE.set(cacheKey, result);
+  return ok(result);
 }
 
 export async function POST(request) {
@@ -210,5 +218,6 @@ export async function POST(request) {
   if (typeof body.isBlocked === "boolean") updates.isBlocked = body.isBlocked;
   if (typeof body.isActivated === "boolean") updates.isActivated = body.isActivated;
   await User.findByIdAndUpdate(body.userId, updates);
+  invalidateAdminUsersCache();
   return ok({ message: "User updated" });
 }

@@ -14,27 +14,34 @@ export async function issueAuthSession(payload, metadata = {}) {
     expiresAt,
     metadata,
   });
+  await setAuthCookies({ ...payload, jti });
   if (metadata?.source === "login") {
+    void pruneLoginRefreshSessions(payload.sub, String(created._id));
+  }
+}
+
+async function pruneLoginRefreshSessions(userId, keepCreatedId) {
+  try {
+    await connectDB();
     const keepIds = await RefreshSession.find({
-      userId: payload.sub,
+      userId,
       "metadata.source": "login",
     })
       .sort({ createdAt: -1 })
       .limit(5)
       .select("_id")
       .lean();
-
-    if (keepIds.length >= 5) {
-      const keepIdSet = new Set(keepIds.map((doc) => String(doc._id)));
-      keepIdSet.add(String(created._id));
-      await RefreshSession.deleteMany({
-        userId: payload.sub,
-        "metadata.source": "login",
-        _id: { $nin: [...keepIdSet] },
-      });
-    }
+    if (keepIds.length < 5) return;
+    const keepIdSet = new Set(keepIds.map((doc) => String(doc._id)));
+    keepIdSet.add(keepCreatedId);
+    await RefreshSession.deleteMany({
+      userId,
+      "metadata.source": "login",
+      _id: { $nin: [...keepIdSet] },
+    });
+  } catch {
+    /* non-critical housekeeping */
   }
-  await setAuthCookies({ ...payload, jti });
 }
 
 export async function rotateRefreshSession({ currentJti, payload, metadata = {} }) {

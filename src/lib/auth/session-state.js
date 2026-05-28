@@ -12,6 +12,28 @@ export function invalidateSessionUserCaches(userId) {
   USER_PROFILE_CACHE.delete(key);
 }
 
+/** After login/signup, avoid a cold cache miss on the first protected page load. */
+export function primeSessionUserCaches(user) {
+  if (!user?._id) return;
+  const key = String(user._id);
+  USER_STATE_CACHE.set(key, {
+    role: user.role,
+    isActivated: Boolean(user.isActivated),
+    isBlocked: Boolean(user.isBlocked),
+  });
+  USER_PROFILE_CACHE.set(key, {
+    username: user.username || "",
+    email: user.email || "",
+    role: user.role || "user",
+    phoneNumber: user.phoneNumber || "",
+    referralCode: user.referralCode || "",
+    referredByUserId: user.referredByUserId || null,
+    isActivated: Boolean(user.isActivated),
+    isBlocked: Boolean(user.isBlocked),
+    mfaEnabled: Boolean(user.mfaEnabled),
+  });
+}
+
 export async function getCachedSessionUserState(userId) {
   const key = String(userId || "");
   if (!key) return null;

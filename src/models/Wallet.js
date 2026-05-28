@@ -13,4 +13,7 @@ const schema = new mongoose.Schema(
   { timestamps: true }
 );
 
+schema.index({ lifetimeEarnings: -1 });
+schema.index({ availableBalance: -1 });
+
 export default getModel("Wallet", schema);

@@ -25,9 +25,6 @@ export async function GET() {
   const timer = createGetTimer("api_dashboard_summary");
   const auth = await requireAuth(["user", "admin"]);
   if (auth.error) return auth.error;
-  await connectDB();
-  const moduleStatusRaw = await getSetting("module_status", {});
-  const moduleAccess = normalizeModuleAccess(moduleStatusRaw);
 
   const userIdStr = String(auth.payload.sub);
   const cached = DASHBOARD_SUMMARY_CACHE.get(userIdStr);
@@ -35,6 +32,11 @@ export async function GET() {
     timer.markCacheHit();
     return timer.finish(withPrivateCacheControl(ok({ data: cached }), 45));
   }
+
+  await connectDB();
+  const moduleStatusRaw = await getSetting("module_status", {});
+  const moduleAccess = normalizeModuleAccess(moduleStatusRaw);
+
   const userObjectId = new mongoose.Types.ObjectId(userIdStr);
   const earningAccessMatch = earningEventAccessMatch(moduleAccess);
 

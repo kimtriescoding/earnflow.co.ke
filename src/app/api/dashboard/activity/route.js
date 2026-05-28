@@ -25,8 +25,6 @@ export async function GET(request) {
   const timer = createGetTimer("api_dashboard_activity");
   const auth = await requireAuth(["user", "admin"]);
   if (auth.error) return auth.error;
-  await connectDB();
-  const moduleAccess = normalizeModuleAccess(await getSetting("module_status", {}));
   const { searchParams } = new URL(request.url);
   const page = Number(searchParams.get("page") || 1);
   const pageSize = Math.min(100, Number(searchParams.get("pageSize") || 20));
@@ -45,6 +43,9 @@ export async function GET(request) {
     timer.markCacheHit();
     return timer.finish(withPrivateCacheControl(ok(cached), 15));
   }
+
+  await connectDB();
+  const moduleAccess = normalizeModuleAccess(await getSetting("module_status", {}));
 
   const feedWindow = Math.min(220, Math.max(pageSize * boundedPage * 2, 80));
   const shouldIncludeNonEarnings = !source;

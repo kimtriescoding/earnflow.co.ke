@@ -16,7 +16,20 @@ function isLikelyPublicAsset(pathname) {
 const protectedUserRoutes = ["/dashboard", "/profile", "/activate"];
 const protectedAdminRoutes = ["/admin"];
 const protectedClientRoutes = ["/client"];
+const publicAuthPages = ["/login", "/signup", "/forgot-password", "/reset-password", "/maintenance"];
+const publicAuthApiPrefixes = [
+  "/api/auth/login",
+  "/api/auth/signup",
+  "/api/auth/check-username",
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
+];
 const JWT_ACCESS_SECRET = new TextEncoder().encode(process.env.JWT_ACCESS_SECRET || "");
+
+function isPublicAuthPath(pathname) {
+  if (publicAuthPages.some((route) => pathname === route || pathname.startsWith(`${route}/`))) return true;
+  return publicAuthApiPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
 
 async function verifyToken(token) {
   if (!token) return null;
@@ -68,6 +81,9 @@ export async function middleware(request) {
     return withTiming(NextResponse.json({ success: false, message: "Access denied" }, { status: 403 }));
   }
   const accessToken = request.cookies.get("tw_access")?.value;
+  if (!accessToken && isPublicAuthPath(pathname)) {
+    return withTiming(NextResponse.next());
+  }
   const payload = await verifyToken(accessToken);
 
   const onUserProtected = protectedUserRoutes.some((route) => pathname.startsWith(route));

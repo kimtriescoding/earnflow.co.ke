@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
 
@@ -12,7 +12,6 @@ const LEGACY_SIGNUP_REF_STORAGE_KEY = "taskwave_signup_referral";
 
 export default function SignupPageClient() {
   const params = useSearchParams();
-  const router = useRouter();
   const [form, setForm] = useState({ username: "", email: "", phoneNumber: "", password: "", referralCode: "" });
   const [message, setMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -108,7 +107,7 @@ export default function SignupPageClient() {
           setUsernameSuggestions([]);
         }
       }
-    }, 350);
+    }, 500);
 
     return () => {
       ctrl.abort();
@@ -149,7 +148,8 @@ export default function SignupPageClient() {
         /* ignore */
       }
       toast.success(msg);
-      router.push("/dashboard");
+      const target = data.isActivated ? "/dashboard" : "/activate";
+      window.location.assign(target);
     } else {
       toast.error(msg);
     }
