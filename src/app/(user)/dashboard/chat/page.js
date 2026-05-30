@@ -2,7 +2,7 @@
 
 import { UserAppShell } from "@/components/user/UserAppShell";
 
-const CHAT_SIGNIN_URL = "https://cashforchat.com/en-US/register?referral_code=WQ79169964";
+const CHAT_SIGNIN_URL = "https://www.rentacyberfriend.com/become-a-cyberfriend/?ref=choose-signup";
 
 export default function ChatPage() {
   return (
