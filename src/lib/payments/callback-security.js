@@ -60,6 +60,25 @@ export function validateActivationPayment(activation, payment, expectedAmount) {
   };
 }
 
+export function validateChatUnlockPayment(unlock, payment, expectedAmount) {
+  const paidAmount = toMoney(payment?.amount);
+  const storedAmount = toMoney(unlock?.amount);
+  const targetAmount = toMoney(expectedAmount);
+  const reference = String(payment?.reference || payment?.referenceNumber || "").trim();
+  const storedRef = String(unlock?.reference ?? "").trim();
+
+  const amountMatches = paidAmount > 0 && paidAmount === storedAmount && paidAmount === targetAmount;
+  const paymentKeyMatches = true;
+  const referenceMatches = Boolean(storedRef) && Boolean(reference) && reference === storedRef;
+  return {
+    ok: amountMatches && paymentKeyMatches && referenceMatches,
+    paidAmount,
+    amountMatches,
+    paymentKeyMatches,
+    referenceMatches,
+  };
+}
+
 export function validateClientOrderPayment(clientOrder, payment) {
   const paidAmount = toMoney(payment?.amount);
   const expected = toMoney(clientOrder?.totalAmount);

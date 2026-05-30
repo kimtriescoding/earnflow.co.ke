@@ -93,6 +93,16 @@ export async function POST(request) {
     if (!incoming.privateKey) delete incoming.privateKey;
     body.wavepay_primary = { ...(existing?.value || {}), ...incoming };
   }
+  if (body.chat_unlock && typeof body.chat_unlock === "object") {
+    const cfg = body.chat_unlock;
+    const fee = Number(cfg.fee);
+    const referrerBonus = Number(cfg.referrerBonus);
+    body.chat_unlock = {
+      ...cfg,
+      fee: Number.isFinite(fee) ? Math.max(0, Number(fee.toFixed(2))) : 100,
+      referrerBonus: Number.isFinite(referrerBonus) ? Math.max(0, Number(referrerBonus.toFixed(2))) : 40,
+    };
+  }
   if (body.withdrawal_fee_mode !== undefined) {
     body.withdrawal_fee_mode = normalizeWithdrawalFeeMode(body.withdrawal_fee_mode);
   }
