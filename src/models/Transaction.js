@@ -54,15 +54,5 @@ schema.index(
     },
   }
 );
-schema.index(
-  { type: 1, "metadata.chatUnlockPaymentId": 1 },
-  {
-    unique: true,
-    partialFilterExpression: {
-      type: { $in: ["chat_unlock_fee", "chat_unlock_referral_bonus"] },
-      "metadata.chatUnlockPaymentId": { $exists: true, $type: "string", $ne: "" },
-    },
-  }
-);
 
 export default getModel("Transaction", schema);

@@ -21,7 +21,6 @@ const schema = new mongoose.Schema(
     mfaSetupOtpAttempts: { type: Number, default: 0 },
     mfaSetupVerifiedAt: { type: Date, default: null },
     balance: { type: Number, default: 0 },
-    chatUnlocked: { type: Boolean, default: false, index: true },
     referredByUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true, default: null },
     uplineL1UserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true, default: null },
     uplineL2UserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true, default: null },

@@ -4,16 +4,12 @@ import ActivationPayment from "@/models/ActivationPayment";
 import LuckySpinTopup from "@/models/LuckySpinTopup";
 import AviatorTopup from "@/models/AviatorTopup";
 import ClientOrder from "@/models/ClientOrder";
-import ChatUnlockPayment from "@/models/ChatUnlockPayment";
-import User from "@/models/User";
 import Transaction from "@/models/Transaction";
 import { creditLuckySpinWallet } from "@/lib/lucky-spin/wallet";
 import { creditAviatorWallet } from "@/lib/aviator/wallet";
 import { getZetupayCredentials } from "@/models/Settings";
 import { resolveActivationFee } from "@/lib/payments/activation-fee";
-import { resolveChatUnlockConfig } from "@/lib/payments/chat-unlock-config";
-import { grantChatUnlockReferrerBonus } from "@/lib/payments/chat-unlock-referral";
-import { isTrustedCallback, validateClientOrderPayment, validateChatUnlockPayment } from "@/lib/payments/callback-security";
+import { isTrustedCallback, validateClientOrderPayment } from "@/lib/payments/callback-security";
 import { logError, logInfo } from "@/lib/observability/logger";
 import { auditPaymentCallback, handleActivationCallbackPipeline } from "@/lib/payments/activation-callback-core";
 import { isMetadataRealFlagForRevenue } from "@/lib/payments/transaction-real";
@@ -26,14 +22,13 @@ export async function POST(request) {
     const payment = body.payment || body;
     const identifier = payment.identifier;
     if (!identifier) return NextResponse.json({ success: false, message: "identifier required" }, { status: 400 });
-    const [activation, topup, aviatorTopup, clientOrder, chatUnlock] = await Promise.all([
+    const [activation, topup, aviatorTopup, clientOrder] = await Promise.all([
       ActivationPayment.findById(identifier),
       LuckySpinTopup.findById(identifier),
       AviatorTopup.findById(identifier),
       ClientOrder.findById(identifier),
-      ChatUnlockPayment.findById(identifier),
     ]);
-    if (!activation && !topup && !aviatorTopup && !clientOrder && !chatUnlock) {
+    if (!activation && !topup && !aviatorTopup && !clientOrder) {
       return NextResponse.json({ success: true, message: "ack" }, { status: 200 });
     }
     const status = String(payment.status || "").toLowerCase();
@@ -95,58 +90,6 @@ export async function POST(request) {
       }
       await clientOrder.save();
       return NextResponse.json({ success: true, message: "client order callback processed" }, { status: 200 });
-    }
-
-    // Handle chat unlock callbacks.
-    if (chatUnlock) {
-      if (chatUnlock.status === "success") {
-        return NextResponse.json({ success: true, message: "already processed" }, { status: 200 });
-      }
-      const real = isMetadataRealFlagForRevenue(chatUnlock?.metadata);
-      if (status === "success" || status === "completed") {
-        const config = await resolveChatUnlockConfig();
-        const check = validateChatUnlockPayment(chatUnlock, payment, config.fee);
-        if (!check.ok) {
-          await ChatUnlockPayment.findOneAndUpdate(
-            { _id: chatUnlock._id, status: "pending" },
-            { $set: { status: "failed", metadata: { ...(chatUnlock.metadata || {}), ...payment, fraudReason: "amount_or_reference_mismatch", real } } }
-          );
-          logError("checkout_callback.chat_unlock_rejected", { identifier: String(identifier), ...check });
-          return NextResponse.json({ success: true, message: "chat unlock payment rejected" }, { status: 200 });
-        }
-        const transitioned = await ChatUnlockPayment.findOneAndUpdate(
-          { _id: chatUnlock._id, status: { $in: ["pending", "failed"] } },
-          { $set: { status: "success", metadata: { ...(chatUnlock.metadata || {}), ...payment, real } } },
-          { returnDocument: "after" }
-        );
-        if (transitioned) {
-          await User.findByIdAndUpdate(chatUnlock.userId, { $set: { chatUnlocked: true } });
-          try {
-            await Transaction.create({
-              userId: chatUnlock.userId,
-              type: "chat_unlock_fee",
-              amount: check.paidAmount,
-              description: "Chat unlock fee",
-              status: "completed",
-              real,
-              metadata: { chatUnlockPaymentId: chatUnlock._id.toString(), reference: chatUnlock.reference || "" },
-            });
-          } catch (e) {
-            if (e?.code !== 11000) throw e;
-          }
-          await grantChatUnlockReferrerBonus({
-            userId: chatUnlock.userId,
-            chatUnlockPaymentId: chatUnlock._id.toString(),
-            real,
-          });
-        }
-      } else {
-        await ChatUnlockPayment.findOneAndUpdate(
-          { _id: chatUnlock._id, status: "pending" },
-          { $set: { status: "failed", metadata: { ...(chatUnlock.metadata || {}), ...payment, real } } }
-        );
-      }
-      return NextResponse.json({ success: true, message: "chat unlock callback processed" }, { status: 200 });
     }
 
     // Handle aviator checkout top-up callbacks.

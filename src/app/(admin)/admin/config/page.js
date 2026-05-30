@@ -41,8 +41,6 @@ export default function AdminConfigPage() {
     chat: true,
   });
   const [clientServicesEnabled, setClientServicesEnabled] = useState(true);
-  const [chatUnlockFee, setChatUnlockFee] = useState(100);
-  const [chatUnlockReferrerBonus, setChatUnlockReferrerBonus] = useState(40);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -86,11 +84,6 @@ export default function AdminConfigPage() {
         if (map.client_services_enabled !== undefined) {
           setClientServicesEnabled(Boolean(map.client_services_enabled));
         }
-        if (map.chat_unlock) {
-          if (map.chat_unlock.fee !== undefined) setChatUnlockFee(Number(map.chat_unlock.fee || 0));
-          if (map.chat_unlock.referrerBonus !== undefined)
-            setChatUnlockReferrerBonus(Number(map.chat_unlock.referrerBonus || 0));
-        }
       })
       .catch(() => {});
   }, []);
@@ -125,10 +118,6 @@ export default function AdminConfigPage() {
           chat: modules.chat,
         },
         client_services_enabled: clientServicesEnabled,
-        chat_unlock: {
-          fee: Number(chatUnlockFee),
-          referrerBonus: Number(chatUnlockReferrerBonus),
-        },
       }),
     });
     const data = await res.json();
@@ -308,32 +297,6 @@ export default function AdminConfigPage() {
               <input type="checkbox" checked={clientServicesEnabled} onChange={(e) => setClientServicesEnabled(e.target.checked)} />
               Enable client services marketplace (videos, chat, academic)
             </label>
-          </section>
-
-          <section className="rounded-2xl border bg-[var(--surface-soft)] p-4">
-            <h3 className="heading-display text-sm font-semibold">Chat unlock</h3>
-            <p className="mt-1 max-w-3xl text-xs muted-text">
-              One-time fee a worker pays to unlock the chat link, and the bonus paid to their direct referrer when the unlock
-              succeeds.
-            </p>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-sm">
-                <span className="muted-text">Unlock fee (KES)</span>
-                <input
-                  className="interactive-control focus-ring px-3.5 py-2.5"
-                  value={chatUnlockFee}
-                  onChange={(e) => setChatUnlockFee(e.target.value)}
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="muted-text">Direct referrer bonus (KES)</span>
-                <input
-                  className="interactive-control focus-ring px-3.5 py-2.5"
-                  value={chatUnlockReferrerBonus}
-                  onChange={(e) => setChatUnlockReferrerBonus(e.target.value)}
-                />
-              </label>
-            </div>
           </section>
 
           <div className="flex flex-wrap items-center gap-3">
