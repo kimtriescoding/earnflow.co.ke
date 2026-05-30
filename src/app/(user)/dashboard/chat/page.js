@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { UserAppShell } from "@/components/user/UserAppShell";
 
-const CHAT_SIGNIN_URL = "https://www.rentacyberfriend.com/signin/";
+const CHAT_SIGNIN_URL = "https://cashforchat.com/en-US/register?referral_code=WQ79169964";
 
 function isCheckoutReturn() {
   if (typeof window === "undefined") return false;
@@ -115,7 +115,7 @@ export default function ChatPage() {
             Get paid to chat with people around the world
           </h2>
           <p className="mt-4 text-sm leading-relaxed text-[var(--muted)]">
-            Rent a Cyber Friend matches you with clients who want real conversation — flexible hours, global audience,
+            Get matched with clients who want real conversation — flexible hours, global audience,
             you choose how you show up.
           </p>
 
