@@ -21,7 +21,15 @@ function timingSafeStringEqual(a, b) {
  */
 export function isTrustedCallback(request, credentials) {
   const env = getEnv();
-  const secret = String(request.headers.get("x-zetupay-secret") ?? "").trim();
+  if (env.WAVEPAY_ALLOW_INSECURE_CALLBACKS === "true") {
+    return true;
+  }
+
+  const secret = String(
+    request.headers.get("x-zetupay-secret") ??
+    request.headers.get("x-wavepay-secret") ??
+    ""
+  ).trim();
   const privateKey = String(credentials?.privateKey ?? "").trim();
   const callbackSecret = String(env.WAVEPAY_CALLBACK_SECRET ?? "").trim();
 
@@ -32,9 +40,6 @@ export function isTrustedCallback(request, credentials) {
   if (callbackSecret) {
     if (!secret) return false;
     return timingSafeStringEqual(secret, callbackSecret);
-  }
-  if (env.WAVEPAY_ALLOW_INSECURE_CALLBACKS === "true") {
-    return true;
   }
   return false;
 }
