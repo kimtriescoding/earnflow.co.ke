@@ -41,6 +41,7 @@ export default function AdminConfigPage() {
     chat: true,
   });
   const [clientServicesEnabled, setClientServicesEnabled] = useState(true);
+  const [automaticPayouts, setAutomaticPayouts] = useState(true);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -84,6 +85,9 @@ export default function AdminConfigPage() {
         if (map.client_services_enabled !== undefined) {
           setClientServicesEnabled(Boolean(map.client_services_enabled));
         }
+        if (map.automatic_payouts !== undefined) {
+          setAutomaticPayouts(Boolean(map.automatic_payouts));
+        }
       })
       .catch(() => {});
   }, []);
@@ -118,6 +122,7 @@ export default function AdminConfigPage() {
           chat: modules.chat,
         },
         client_services_enabled: clientServicesEnabled,
+        automatic_payouts: automaticPayouts,
       }),
     });
     const data = await res.json();
@@ -297,6 +302,26 @@ export default function AdminConfigPage() {
               <input type="checkbox" checked={clientServicesEnabled} onChange={(e) => setClientServicesEnabled(e.target.checked)} />
               Enable client services marketplace (videos, chat, academic)
             </label>
+          </section>
+
+          <section className="rounded-2xl border bg-[var(--surface-soft)] p-4">
+            <h3 className="heading-display text-sm font-semibold">Automatic payouts</h3>
+            <div className="mt-3 flex items-center justify-between rounded-xl border bg-[var(--surface)] px-4 py-3 text-sm">
+              <span className="muted-text">
+                Toggle automatic payouts processing. If disabled, user withdrawals will remain pending in queue for manual admin action.
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={automaticPayouts}
+                onClick={() => setAutomaticPayouts((prev) => !prev)}
+                className={`inline-flex h-8 w-14 shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] ${
+                  automaticPayouts ? "justify-end bg-[var(--brand)]" : "justify-start bg-[color-mix(in_oklab,var(--border)_75%,var(--surface))]"
+                }`}
+              >
+                <span className="pointer-events-none block h-6 w-6 rounded-full bg-white shadow" aria-hidden />
+              </button>
+            </div>
           </section>
 
           <div className="flex flex-wrap items-center gap-3">

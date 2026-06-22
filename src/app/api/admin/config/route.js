@@ -116,6 +116,7 @@ export async function POST(request) {
     "withdrawal_fee_value",
     "withdrawal_fee_tiers",
     "min_withdrawal_amount",
+    "automatic_payouts",
   ];
   for (const k of settingsCacheKeys) {
     if (Object.prototype.hasOwnProperty.call(body, k)) {

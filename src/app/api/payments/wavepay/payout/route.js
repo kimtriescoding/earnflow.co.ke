@@ -119,6 +119,18 @@ export async function POST(request) {
     }
     return fail("Unable to create withdrawal request", 500);
   }
+  const automaticPayouts = await getSetting("automatic_payouts", true);
+  if (!automaticPayouts) {
+    invalidateDashboardUserCaches(auth.payload.sub);
+    invalidateAdminCaches();
+    return ok({
+      message: "Payout initiated",
+      withdrawalId: withdrawal._id.toString(),
+      fee: computedFee,
+      totalDeduction,
+    });
+  }
+
   const creds = await getZetupayCredentials(false);
   if (creds?.error) {
     const rolledBackWallet = await Wallet.findOneAndUpdate(

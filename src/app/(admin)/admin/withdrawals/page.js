@@ -27,24 +27,24 @@ export default function AdminWithdrawalsPage() {
   const [refundSubmitting, setRefundSubmitting] = useState(false);
   const [ackModalRow, setAckModalRow] = useState(null);
   const [ackSubmitting, setAckSubmitting] = useState(false);
+  const [postModalRow, setPostModalRow] = useState(null);
+  const [postSubmitting, setPostSubmitting] = useState(false);
+  const [completeModalRow, setCompleteModalRow] = useState(null);
+  const [completeSubmitting, setCompleteSubmitting] = useState(false);
+  const [completeTxId, setCompleteTxId] = useState("");
+  const [completeNotes, setCompleteNotes] = useState("");
+  const [cancelModalRow, setCancelModalRow] = useState(null);
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [cancelNotes, setCancelNotes] = useState("");
   const pageSize = 20;
 
   const loadData = () => {
     setLoading(true);
-    fetch(`/api/admin/withdrawals?page=${page}&pageSize=${pageSize}&status=${status}`)
+    fetch(`/api/admin/withdrawals?page=${page}&pageSize=${pageSize}&status=${status}&search=${encodeURIComponent(search)}`)
       .then((res) => res.json())
       .then((data) => {
         if (!data.success) return;
-        const filtered = (data.data || []).filter((r) => {
-          if (!search.trim()) return true;
-          const q = search.toLowerCase();
-          return (
-            String(r.user?.username || "").toLowerCase().includes(q) ||
-            String(r.user?.email || "").toLowerCase().includes(q) ||
-            String(r.phoneNumber || "").toLowerCase().includes(q)
-          );
-        });
-        setRows(filtered.map((item) => ({ ...item, id: item._id })));
+        setRows((data.data || []).map((item) => ({ ...item, id: item._id })));
         setTotal(data.total || 0);
       })
       .catch(() => {})
@@ -54,7 +54,7 @@ export default function AdminWithdrawalsPage() {
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, status]);
+  }, [page, status, search]);
 
   const closeRefundModal = useCallback(() => {
     if (refundSubmitting) return;
@@ -65,6 +65,24 @@ export default function AdminWithdrawalsPage() {
     if (ackSubmitting) return;
     setAckModalRow(null);
   }, [ackSubmitting]);
+
+  const closePostModal = useCallback(() => {
+    if (postSubmitting) return;
+    setPostModalRow(null);
+  }, [postSubmitting]);
+
+  const closeCompleteModal = useCallback(() => {
+    if (completeSubmitting) return;
+    setCompleteModalRow(null);
+    setCompleteTxId("");
+    setCompleteNotes("");
+  }, [completeSubmitting]);
+
+  const closeCancelModal = useCallback(() => {
+    if (cancelSubmitting) return;
+    setCancelModalRow(null);
+    setCancelNotes("");
+  }, [cancelSubmitting]);
 
   useEffect(() => {
     if (!refundModalRow) return;
@@ -83,6 +101,114 @@ export default function AdminWithdrawalsPage() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [ackModalRow, ackSubmitting, closeAckModal]);
+
+  useEffect(() => {
+    if (!postModalRow) return;
+    const onKey = (e) => {
+      if (e.key === "Escape" && !postSubmitting) closePostModal();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [postModalRow, postSubmitting, closePostModal]);
+
+  useEffect(() => {
+    if (!completeModalRow) return;
+    const onKey = (e) => {
+      if (e.key === "Escape" && !completeSubmitting) closeCompleteModal();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [completeModalRow, completeSubmitting, closeCompleteModal]);
+
+  useEffect(() => {
+    if (!cancelModalRow) return;
+    const onKey = (e) => {
+      if (e.key === "Escape" && !cancelSubmitting) closeCancelModal();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [cancelModalRow, cancelSubmitting, closeCancelModal]);
+
+  const confirmPostToGateway = async () => {
+    const row = postModalRow;
+    if (!row) return;
+    setPostSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/withdrawals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ withdrawalId: row._id, action: "post_to_gateway" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        toast.error(data.message || data.error || "Failed to post payout to gateway.");
+        return;
+      }
+      toast.success("Payout successfully posted to gateway.");
+      setPostModalRow(null);
+      loadData();
+    } finally {
+      setPostSubmitting(false);
+    }
+  };
+
+  const confirmCompleteManually = async () => {
+    const row = completeModalRow;
+    if (!row) return;
+    setCompleteSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/withdrawals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          withdrawalId: row._id,
+          action: "complete_manual",
+          transactionId: completeTxId,
+          notes: completeNotes,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        toast.error(data.message || data.error || "Failed to complete payout manually.");
+        return;
+      }
+      toast.success("Payout marked as completed manually.");
+      setCompleteModalRow(null);
+      setCompleteTxId("");
+      setCompleteNotes("");
+      loadData();
+    } finally {
+      setCompleteSubmitting(false);
+    }
+  };
+
+  const confirmCancelPayout = async () => {
+    const row = cancelModalRow;
+    if (!row) return;
+    setCancelSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/withdrawals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          withdrawalId: row._id,
+          action: "cancel",
+          notes: cancelNotes,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        toast.error(data.message || data.error || "Failed to cancel payout.");
+        return;
+      }
+      toast.success("Payout cancelled and refunded to wallet.");
+      setCancelModalRow(null);
+      setCancelNotes("");
+      loadData();
+    } finally {
+      setCancelSubmitting(false);
+    }
+  };
 
   const updateStatus = async (withdrawalId, nextStatus) => {
     const res = await fetch("/api/admin/withdrawals", {
@@ -236,21 +362,33 @@ export default function AdminWithdrawalsPage() {
 
         return (
           <div className="flex flex-wrap items-center gap-1">
+            {row.metadata?.payoutGatewayQueued && (
+              <span className="text-[10px] uppercase font-semibold text-sky-500 bg-sky-500/10 px-1.5 py-0.5 rounded mr-1">
+                Gateway Queued
+              </span>
+            )}
+            {!row.metadata?.payoutGatewayQueued && (
+              <button
+                type="button"
+                className="inline-flex min-h-0 shrink-0 cursor-pointer items-center rounded-md border border-[var(--brand)] bg-[var(--brand)] px-2.5 py-1.5 text-xs font-semibold leading-snug text-white shadow-sm hover:bg-[color-mix(in_srgb,var(--brand)_90%,black)]"
+                onClick={() => setPostModalRow(row)}
+              >
+                Post to Gateway
+              </button>
+            )}
             <button
               type="button"
-              className={`${btnDense} disabled:pointer-events-none disabled:opacity-35`}
-              disabled={!isPending}
-              onClick={() => updateStatus(row._id, "approved")}
+              className="inline-flex min-h-0 shrink-0 cursor-pointer items-center rounded-md border border-emerald-800 bg-emerald-700 px-2.5 py-1.5 text-xs font-semibold leading-snug text-white shadow-sm hover:bg-emerald-600"
+              onClick={() => setCompleteModalRow(row)}
             >
-              Approve
+              Complete
             </button>
             <button
               type="button"
-              className={`${btnDense} disabled:pointer-events-none disabled:opacity-35`}
-              disabled={!isPending}
-              onClick={() => updateStatus(row._id, "rejected")}
+              className="inline-flex min-h-0 shrink-0 cursor-pointer items-center rounded-md border border-red-800 bg-red-700 px-2.5 py-1.5 text-xs font-semibold leading-snug text-white shadow-sm hover:bg-red-600"
+              onClick={() => setCancelModalRow(row)}
             >
-              Reject
+              Cancel
             </button>
           </div>
         );
@@ -291,7 +429,10 @@ export default function AdminWithdrawalsPage() {
         pageSize={pageSize}
         search={search}
         sortState={{ field: "createdAt", direction: "desc" }}
-        onSearchChange={setSearch}
+        onSearchChange={(value) => {
+          setPage(1);
+          setSearch(value);
+        }}
         onSortChange={() => {}}
         onPageChange={setPage}
         emptyLabel="No withdrawals found."
@@ -493,6 +634,312 @@ export default function AdminWithdrawalsPage() {
                 className="secondary-btn inline-flex min-h-0 cursor-pointer px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={ackSubmitting}
                 onClick={closeAckModal}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {postModalRow ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (!postSubmitting) closePostModal();
+          }}
+        >
+          <div
+            className="card-surface w-full max-w-md overflow-y-auto rounded-3xl p-5 sm:p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="post-dialog-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h4 id="post-dialog-title" className="heading-display text-base font-semibold">
+                Post payout to gateway
+              </h4>
+              <button
+                type="button"
+                className="secondary-btn inline-flex min-h-0 cursor-pointer items-center px-3 py-1.5 text-xs"
+                disabled={postSubmitting}
+                onClick={closePostModal}
+              >
+                Close
+              </button>
+            </div>
+
+            <p className="mt-3 text-sm leading-relaxed text-[var(--foreground)]">
+              This will send the payout request to the configured payment gateway (Zetupay/Wavepay) immediately.
+            </p>
+
+            <dl className="mt-4 grid gap-3 border-y border-[var(--border)] py-4 text-sm">
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">User</dt>
+                <dd className="mt-0.5">{postModalRow.user?.username || postModalRow.user?.email || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Phone</dt>
+                <dd className="mt-0.5">{postModalRow.phoneNumber || "—"}</dd>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Payout (KES)</dt>
+                  <dd className="mt-0.5 tabular-nums">{Number(postModalRow.amount || 0).toFixed(2)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Fee (KES)</dt>
+                  <dd className="mt-0.5 tabular-nums">{Number(postModalRow.fee ?? 0).toFixed(2)}</dd>
+                </div>
+              </div>
+            </dl>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="inline-flex min-h-0 cursor-pointer items-center justify-center gap-1.5 rounded-2xl bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[color-mix(in_srgb,var(--brand)_90%,black)] disabled:cursor-not-allowed disabled:opacity-55"
+                disabled={postSubmitting}
+                aria-busy={postSubmitting}
+                onClick={() => void confirmPostToGateway()}
+              >
+                {postSubmitting ? (
+                  <>
+                    <span
+                      className="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent opacity-90"
+                      aria-hidden
+                    />
+                    <span>Posting…</span>
+                  </>
+                ) : (
+                  "Confirm post to gateway"
+                )}
+              </button>
+              <button
+                type="button"
+                className="secondary-btn inline-flex min-h-0 cursor-pointer px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={postSubmitting}
+                onClick={closePostModal}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {completeModalRow ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (!completeSubmitting) closeCompleteModal();
+          }}
+        >
+          <div
+            className="card-surface w-full max-w-md overflow-y-auto rounded-3xl p-5 sm:p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="complete-dialog-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h4 id="complete-dialog-title" className="heading-display text-base font-semibold">
+                Complete payout manually
+              </h4>
+              <button
+                type="button"
+                className="secondary-btn inline-flex min-h-0 cursor-pointer items-center px-3 py-1.5 text-xs"
+                disabled={completeSubmitting}
+                onClick={closeCompleteModal}
+              >
+                Close
+              </button>
+            </div>
+
+            <p className="mt-3 text-sm leading-relaxed text-[var(--foreground)]">
+              This will mark the withdrawal request as completed. Enter the manual transaction reference/receipt and notes below.
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Transaction ID / Reference
+                <input
+                  className="interactive-control focus-ring mt-1 w-full rounded-xl bg-[var(--surface-soft)] px-3.5 py-2.5 text-sm normal-case font-normal text-[var(--foreground)]"
+                  value={completeTxId}
+                  onChange={(e) => setCompleteTxId(e.target.value)}
+                  placeholder="e.g. MPESA-REF-1234"
+                  disabled={completeSubmitting}
+                />
+              </label>
+              <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Admin Notes
+                <input
+                  className="interactive-control focus-ring mt-1 w-full rounded-xl bg-[var(--surface-soft)] px-3.5 py-2.5 text-sm normal-case font-normal text-[var(--foreground)]"
+                  value={completeNotes}
+                  onChange={(e) => setCompleteNotes(e.target.value)}
+                  placeholder="e.g. Paid manually via alternative channel"
+                  disabled={completeSubmitting}
+                />
+              </label>
+            </div>
+
+            <dl className="mt-4 grid gap-3 border-y border-[var(--border)] py-4 text-sm">
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">User</dt>
+                <dd className="mt-0.5">{completeModalRow.user?.username || completeModalRow.user?.email || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Phone</dt>
+                <dd className="mt-0.5">{completeModalRow.phoneNumber || "—"}</dd>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Payout (KES)</dt>
+                  <dd className="mt-0.5 tabular-nums">{Number(completeModalRow.amount || 0).toFixed(2)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Fee (KES)</dt>
+                  <dd className="mt-0.5 tabular-nums">{Number(completeModalRow.fee ?? 0).toFixed(2)}</dd>
+                </div>
+              </div>
+            </dl>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="inline-flex min-h-0 cursor-pointer items-center justify-center gap-1.5 rounded-2xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-55"
+                disabled={completeSubmitting}
+                aria-busy={completeSubmitting}
+                onClick={() => void confirmCompleteManually()}
+              >
+                {completeSubmitting ? (
+                  <>
+                    <span
+                      className="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent opacity-90"
+                      aria-hidden
+                    />
+                    <span>Completing…</span>
+                  </>
+                ) : (
+                  "Confirm complete manually"
+                )}
+              </button>
+              <button
+                type="button"
+                className="secondary-btn inline-flex min-h-0 cursor-pointer px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={completeSubmitting}
+                onClick={closeCompleteModal}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {cancelModalRow ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (!cancelSubmitting) closeCancelModal();
+          }}
+        >
+          <div
+            className="card-surface w-full max-w-md overflow-y-auto rounded-3xl p-5 sm:p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-dialog-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h4 id="cancel-dialog-title" className="heading-display text-base font-semibold">
+                Cancel payout & refund
+              </h4>
+              <button
+                type="button"
+                className="secondary-btn inline-flex min-h-0 cursor-pointer items-center px-3 py-1.5 text-xs"
+                disabled={cancelSubmitting}
+                onClick={closeCancelModal}
+              >
+                Close
+              </button>
+            </div>
+
+            <p className="mt-3 text-sm leading-relaxed text-[var(--foreground)]">
+              This will cancel the payout, setting the status to Failed, and refund the amount plus fee back to the user's available wallet balance.
+            </p>
+
+            <div className="mt-4">
+              <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Cancellation Reason / Note
+                <input
+                  className="interactive-control focus-ring mt-1 w-full rounded-xl bg-[var(--surface-soft)] px-3.5 py-2.5 text-sm normal-case font-normal text-[var(--foreground)]"
+                  value={cancelNotes}
+                  onChange={(e) => setCancelNotes(e.target.value)}
+                  placeholder="e.g. Invalid phone number or account details"
+                  disabled={cancelSubmitting}
+                />
+              </label>
+            </div>
+
+            <dl className="mt-4 grid gap-3 border-y border-[var(--border)] py-4 text-sm">
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">User</dt>
+                <dd className="mt-0.5">{cancelModalRow.user?.username || cancelModalRow.user?.email || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Phone</dt>
+                <dd className="mt-0.5">{cancelModalRow.phoneNumber || "—"}</dd>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Payout (KES)</dt>
+                  <dd className="mt-0.5 tabular-nums">{Number(cancelModalRow.amount || 0).toFixed(2)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Fee (KES)</dt>
+                  <dd className="mt-0.5 tabular-nums">{Number(cancelModalRow.fee ?? 0).toFixed(2)}</dd>
+                </div>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Total refund to wallet (KES)</dt>
+                <dd className="mt-0.5 text-base font-semibold tabular-nums text-[var(--foreground)]">
+                  {(Number(cancelModalRow.amount || 0) + Number(cancelModalRow.fee ?? 0)).toFixed(2)}
+                </dd>
+              </div>
+            </dl>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="inline-flex min-h-0 cursor-pointer items-center justify-center gap-1.5 rounded-2xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-55"
+                disabled={cancelSubmitting}
+                aria-busy={cancelSubmitting}
+                onClick={() => void confirmCancelPayout()}
+              >
+                {cancelSubmitting ? (
+                  <>
+                    <span
+                      className="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent opacity-90"
+                      aria-hidden
+                    />
+                    <span>Cancelling…</span>
+                  </>
+                ) : (
+                  "Confirm cancellation"
+                )}
+              </button>
+              <button
+                type="button"
+                className="secondary-btn inline-flex min-h-0 cursor-pointer px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={cancelSubmitting}
+                onClick={closeCancelModal}
               >
                 Cancel
               </button>

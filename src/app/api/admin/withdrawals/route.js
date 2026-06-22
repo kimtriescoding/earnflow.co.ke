@@ -18,9 +18,8 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const page = Number(searchParams.get("page") || 1);
   const pageSize = Math.min(100, Number(searchParams.get("pageSize") || 20));
-  const status = String(searchParams.get("status") || "").trim();
-  const sortDir = searchParams.get("sortDir") === "asc" ? 1 : -1;
-  const cacheKey = `${status}|${page}|${pageSize}|${sortDir}`;
+  const search = String(searchParams.get("search") || "").trim();
+  const cacheKey = `${status}|${page}|${pageSize}|${sortDir}|${search}`;
   const cached = ADMIN_WITHDRAWALS_CACHE.get(cacheKey);
   if (cached) {
     timer.markCacheHit();
@@ -28,6 +27,27 @@ export async function GET(request) {
   }
 
   const filter = status ? { status } : {};
+  if (search) {
+    const matchedUsers = await User.find({
+      $or: [
+        { username: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } }
+      ]
+    }).select("_id").lean();
+    const userIds = matchedUsers.map((u) => u._id);
+
+    const searchConditions = [{ phoneNumber: { $regex: search, $options: "i" } }];
+    if (userIds.length > 0) {
+      searchConditions.push({ userId: { $in: userIds } });
+    }
+    if (mongoose.Types.ObjectId.isValid(search)) {
+      searchConditions.push({ _id: new mongoose.Types.ObjectId(search) });
+    }
+    
+    filter.$and = filter.$and || [];
+    filter.$and.push({ $or: searchConditions });
+  }
+
   const [total, withdrawals] = await Promise.all([
     Withdrawal.countDocuments(filter),
     Withdrawal.find(filter).sort({ createdAt: sortDir }).skip((page - 1) * pageSize).limit(pageSize).lean(),
@@ -62,6 +82,160 @@ export async function PATCH(request) {
   await connectDB();
   const body = await request.json().catch(() => null);
   if (!body?.withdrawalId) return fail("withdrawalId required");
+
+  if (body.action === "post_to_gateway") {
+    if (!mongoose.Types.ObjectId.isValid(String(body.withdrawalId))) {
+      return fail("Invalid withdrawalId", 400);
+    }
+    const withdrawal = await Withdrawal.findById(body.withdrawalId);
+    if (!withdrawal) return fail("Withdrawal not found", 404);
+    if (withdrawal.status !== "pending") {
+      return fail("Only pending withdrawals can be posted to the gateway", 400);
+    }
+
+    const { getZetupayCredentials } = await import("@/models/Settings");
+    const creds = await getZetupayCredentials(false);
+    if (creds?.error) {
+      return fail(creds.error || "Payout gateway credentials missing", 500);
+    }
+
+    const { initiatePayout } = await import("@/lib/payments/wavepay");
+    const result = await initiatePayout({
+      publicKey: creds.publicKey,
+      privateKey: creds.privateKey,
+      walletId: creds.walletId,
+      amount: withdrawal.amount,
+      identifier: withdrawal._id.toString(),
+      phoneNumber: withdrawal.phoneNumber,
+    });
+
+    if (!result.success) {
+      return fail(result.error || "Payout initiation failed", 400);
+    }
+
+    await Withdrawal.findByIdAndUpdate(withdrawal._id, {
+      $set: {
+        "metadata.payoutGatewayQueued": true,
+        "metadata.payoutGatewayQueuedAt": new Date(),
+      },
+    });
+
+    invalidateAdminCaches();
+    if (withdrawal.userId) invalidateDashboardUserCaches(String(withdrawal.userId));
+    return ok({ message: "Payout posted to gateway successfully" });
+  }
+
+  if (body.action === "complete_manual") {
+    if (!mongoose.Types.ObjectId.isValid(String(body.withdrawalId))) {
+      return fail("Invalid withdrawalId", 400);
+    }
+    const withdrawal = await Withdrawal.findById(body.withdrawalId);
+    if (!withdrawal) return fail("Withdrawal not found", 404);
+    if (withdrawal.status !== "pending") {
+      return fail("Only pending withdrawals can be completed manually", 400);
+    }
+
+    const totalDeduction = withdrawal.amount + withdrawal.fee;
+    const transitioned = await Withdrawal.findOneAndUpdate(
+      { _id: withdrawal._id, status: "pending" },
+      {
+        $set: {
+          status: "completed",
+          transactionId: body.transactionId || `manual-${withdrawal._id}`,
+          processedAt: new Date(),
+          notes: body.notes || "Payout completed manually by admin.",
+          metadata: {
+            ...(withdrawal.metadata || {}),
+            completedManually: true,
+            completedManuallyAt: new Date(),
+            completedManuallyBy: auth.payload.sub,
+          },
+        },
+      },
+      { returnDocument: "after" }
+    );
+
+    if (!transitioned) {
+      return fail("Withdrawal already processed", 400);
+    }
+
+    try {
+      await Transaction.create({
+        userId: withdrawal.userId,
+        type: "withdrawal",
+        amount: -totalDeduction,
+        description: "Withdrawal",
+        status: "completed",
+        metadata: {
+          withdrawalId: withdrawal._id,
+          referenceNumber: body.transactionId || `manual-${withdrawal._id}`,
+          amount: withdrawal.amount,
+          phoneNumber: withdrawal.phoneNumber,
+          notes: body.notes || "Completed manually by admin.",
+        },
+      });
+    } catch (e) {
+      if (e?.code !== 11000) throw e;
+    }
+
+    const { ensureOutboxJob } = await import("@/lib/payments/outbox-enqueue");
+    const { processOutboxJobByKey } = await import("@/lib/payments/outbox-processor");
+
+    const notifyKey = `payout_notify_success:${withdrawal._id}`;
+    await ensureOutboxJob({
+      type: "payout_notify_success",
+      idempotencyKey: notifyKey,
+      payload: {
+        userId: withdrawal.userId,
+        withdrawalId: withdrawal._id,
+        amount: withdrawal.amount,
+        referenceNumber: body.transactionId || `manual-${withdrawal._id}`,
+        method: withdrawal.method,
+        phoneNumber: withdrawal.phoneNumber,
+      },
+      status: "pending",
+    });
+
+    try {
+      await processOutboxJobByKey(notifyKey);
+    } catch (err) {
+      logInfo("payout.complete_manual_notification_error", { withdrawalId: String(withdrawal._id), error: err.message });
+    }
+
+    invalidateAdminCaches();
+    invalidateDashboardUserCaches(String(withdrawal.userId));
+    return ok({ message: "Withdrawal completed manually." });
+  }
+
+  if (body.action === "cancel") {
+    if (!mongoose.Types.ObjectId.isValid(String(body.withdrawalId))) {
+      return fail("Invalid withdrawalId", 400);
+    }
+    const withdrawal = await Withdrawal.findById(body.withdrawalId);
+    if (!withdrawal) return fail("Withdrawal not found", 404);
+    if (withdrawal.status !== "pending") {
+      return fail("Only pending withdrawals can be cancelled", 400);
+    }
+
+    const updated = await Withdrawal.findByIdAndUpdate(
+      withdrawal._id,
+      {
+        status: "failed",
+        notes: body.notes || "Cancelled by admin",
+        processedAt: new Date(),
+      },
+      { returnDocument: "after" }
+    );
+
+    const r = await creditWithdrawalRefundIfAbsent(updated, {
+      skipReservationGate: true,
+      source: "admin_manual_cancel",
+    });
+
+    invalidateAdminCaches();
+    invalidateDashboardUserCaches(String(withdrawal.userId));
+    return ok({ message: "Withdrawal cancelled and refunded", refundApplied: r.didApply });
+  }
 
   if (body.action === "acknowledge_no_refund") {
     if (!mongoose.Types.ObjectId.isValid(String(body.withdrawalId))) {
