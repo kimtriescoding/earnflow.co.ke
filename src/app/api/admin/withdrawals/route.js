@@ -19,6 +19,8 @@ export async function GET(request) {
   const page = Number(searchParams.get("page") || 1);
   const pageSize = Math.min(100, Number(searchParams.get("pageSize") || 20));
   const search = String(searchParams.get("search") || "").trim();
+  const status = String(searchParams.get("status") || "").trim();
+  const sortDir = searchParams.get("sortDir") === "asc" ? 1 : -1;
   const cacheKey = `${status}|${page}|${pageSize}|${sortDir}|${search}`;
   const cached = ADMIN_WITHDRAWALS_CACHE.get(cacheKey);
   if (cached) {
