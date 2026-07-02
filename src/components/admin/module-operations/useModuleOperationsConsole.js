@@ -24,6 +24,7 @@ export function useModuleOperationsConsole({
   itemTableShowBrief = true,
   itemTableOmitKeys = [],
   enablePendingEarningReview = true,
+  maxInteractions = 100,
 }) {
   const emptyItemForm = useMemo(
     () => ({
@@ -68,7 +69,7 @@ export function useModuleOperationsConsole({
     const [settingsRes, itemsRes, interactionsRes] = await Promise.all([
       fetch(`/api/admin/modules/${moduleSlug}/settings`).then((res) => res.json()),
       fetch(`/api/admin/modules/${moduleSlug}/items?page=1&pageSize=100`).then((res) => res.json()),
-      fetch(`/api/admin/modules/${moduleSlug}/interactions?page=1&pageSize=100`).then((res) => res.json()),
+      fetch(`/api/admin/modules/${moduleSlug}/interactions?page=1&pageSize=${maxInteractions}`).then((res) => res.json()),
     ]);
     if (settingsRes?.success) {
       setEnabled(Boolean(settingsRes.data?.enabled));
@@ -78,7 +79,7 @@ export function useModuleOperationsConsole({
     if (interactionsRes?.success) {
       setInteractions(interactionsRes.data || []);
     }
-  }, [moduleSlug, configFields]);
+  }, [moduleSlug, configFields, maxInteractions]);
 
   useEffect(() => {
     load().catch(() => {});

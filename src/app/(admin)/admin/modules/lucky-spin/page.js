@@ -17,6 +17,7 @@ export default function AdminLuckySpinPage() {
           { key: "minBetAmount", label: "Minimum bet amount (KES)", type: "number" },
         ]}
         enableCrud={false}
+        maxInteractions={20}
         interactionColumns={[
           {
             field: "userId",
