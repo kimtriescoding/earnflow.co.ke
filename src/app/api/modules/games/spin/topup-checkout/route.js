@@ -20,7 +20,7 @@ export async function POST(request) {
   const phoneNumber = String(body.phoneNumber || "").trim();
   if (!Number.isFinite(amount) || amount <= 0) return fail("Invalid top-up amount");
 
-  const creds = await getZetupayCredentials(false);
+  const creds = await getZetupayCredentials("luckySpinTopup", false);
   if (creds?.error) return fail("Zetupay credentials missing", 500);
   const switches = await getPaymentRealSwitches();
   const real = switches.luckySpinTopup;

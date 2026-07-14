@@ -30,7 +30,7 @@ export async function POST(request) {
   const activation = await resolveActivationFee();
   const amount = Number(activation.amount || 0);
   if (amount <= 0) return fail("Activation amount not configured");
-  const creds = await getZetupayCredentials(false);
+  const creds = await getZetupayCredentials("activation", false);
   if (creds?.error) return fail("Zetupay credentials missing", 500);
   const switches = await getPaymentRealSwitches();
   const real = switches.activation;

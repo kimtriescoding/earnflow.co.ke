@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/ui/AppShell";
 import { adminNavItems } from "@/lib/nav/admin-nav";
 import { toast } from "sonner";
-import { BarChart3, CreditCard, Plane, Orbit, Loader2 } from "lucide-react";
+import { BarChart3, CreditCard, Plane, Orbit, Loader2, Video, MessageSquare, BookOpen } from "lucide-react";
 
 const POLL_MS = 12000;
 
@@ -31,6 +31,45 @@ const ITEMS = [
   },
 ];
 
+const CREDENTIALS_MODULES = [
+  {
+    key: "activation",
+    title: "Activation checkout",
+    description: "Credentials override for account activation payments.",
+    icon: CreditCard,
+  },
+  {
+    key: "aviatorTopup",
+    title: "Aviator top-up",
+    description: "Credentials override for Aviator in-game checkout top-ups.",
+    icon: Plane,
+  },
+  {
+    key: "luckySpinTopup",
+    title: "Lucky Spin top-up",
+    description: "Credentials override for Lucky Spin checkout top-ups.",
+    icon: Orbit,
+  },
+  {
+    key: "video",
+    title: "Video orders",
+    description: "Credentials override for Video order checkout.",
+    icon: Video,
+  },
+  {
+    key: "chat",
+    title: "Chat orders",
+    description: "Credentials override for Chat threads checkout.",
+    icon: MessageSquare,
+  },
+  {
+    key: "academic",
+    title: "Academic orders",
+    description: "Credentials override for Academic tasks checkout.",
+    icon: BookOpen,
+  },
+];
+
 const TALLY_KEYS = [
   { key: "activation_fee", label: "Activation fee (main wallet row)" },
   { key: "aviator_topup_checkout", label: "Aviator checkout top-up" },
@@ -40,6 +79,14 @@ const TALLY_KEYS = [
 export default function SwitcherPageClient() {
   const [loading, setLoading] = useState(true);
   const [switches, setSwitches] = useState(DEFAULT_SWITCHES);
+  const [moduleCredentials, setModuleCredentials] = useState({
+    activation: { useCustom: false, publicKey: "", privateKey: "", walletId: "" },
+    aviatorTopup: { useCustom: false, publicKey: "", privateKey: "", walletId: "" },
+    luckySpinTopup: { useCustom: false, publicKey: "", privateKey: "", walletId: "" },
+    video: { useCustom: false, publicKey: "", privateKey: "", walletId: "" },
+    chat: { useCustom: false, publicKey: "", privateKey: "", walletId: "" },
+    academic: { useCustom: false, publicKey: "", privateKey: "", walletId: "" },
+  });
   const [tallies, setTallies] = useState({});
   const [saving, setSaving] = useState(false);
   const [tallyUpdatedAt, setTallyUpdatedAt] = useState(null);
@@ -62,6 +109,9 @@ export default function SwitcherPageClient() {
     setTallyUpdatedAt(new Date());
     if (!silent || !dirtyRef.current) {
       setSwitches(nextSwitches);
+    }
+    if (data.data?.moduleCredentials) {
+      setModuleCredentials(data.data.moduleCredentials);
     }
     if (!silent) setLoading(false);
   }, []);
@@ -94,7 +144,10 @@ export default function SwitcherPageClient() {
     const res = await fetch("/api/admin/switcher", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(switches),
+      body: JSON.stringify({
+        ...switches,
+        moduleCredentials,
+      }),
     });
     const data = await res.json().catch(() => ({}));
     setSaving(false);
@@ -182,6 +235,138 @@ export default function SwitcherPageClient() {
             );
           })}
         </div>
+
+        <section className="space-y-4">
+          <div className="card-surface rounded-3xl p-6 md:p-8">
+            <p className="eyebrow-label text-xs uppercase tracking-[0.14em]">Customization</p>
+            <h2 className="heading-display mt-1 text-xl font-semibold md:text-2xl">ZetuPay Module Credentials</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed muted-text">
+              Configure different credentials (public key, private key, wallet ID) for specific modules. By default, the system initiates payments using the global credentials defined in the economy configuration.
+            </p>
+          </div>
+
+          <div className="grid gap-4">
+            {CREDENTIALS_MODULES.map((item) => {
+              const cfg = moduleCredentials[item.key] || { useCustom: false, publicKey: "", privateKey: "", walletId: "" };
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.key}
+                  className="card-surface flex flex-col gap-4 rounded-3xl border border-[color-mix(in_oklab,var(--border)_50%,transparent)] p-5"
+                >
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-6">
+                    <div className="flex min-w-0 flex-1 gap-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[color-mix(in_oklab,var(--brand)_32%,var(--border))] bg-[color-mix(in_srgb,var(--brand)_10%,var(--surface-soft))] text-[var(--brand)]">
+                        <Icon className="h-5 w-5" strokeWidth={2} aria-hidden />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="heading-display text-base font-semibold">{item.title}</h3>
+                        <p className="mt-1.5 text-sm leading-relaxed muted-text">{item.description}</p>
+                        <p className="mt-2 text-xs font-medium text-[var(--muted)]">
+                          Status:{" "}
+                          <span className={cfg.useCustom ? "text-[var(--brand)]" : "text-[var(--muted)]"}>
+                            {cfg.useCustom ? "Using custom credentials override" : "Using default global credentials"}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex shrink-0 items-center justify-between gap-4 border-t border-[var(--border)] pt-4 md:border-t-0 md:pt-0">
+                      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)] md:hidden">Override</span>
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`hidden text-sm font-medium sm:inline ${cfg.useCustom ? "text-[var(--foreground)]" : "text-[var(--muted)]"}`}
+                        >
+                          {cfg.useCustom ? "Enabled" : "Disabled"}
+                        </span>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={cfg.useCustom}
+                          disabled={loading}
+                          onClick={() => {
+                            setModuleCredentials((prev) => ({
+                              ...prev,
+                              [item.key]: {
+                                ...prev[item.key],
+                                useCustom: !prev[item.key]?.useCustom,
+                              },
+                            }));
+                          }}
+                          className={`inline-flex h-8 w-14 shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-50 ${
+                            cfg.useCustom ? "justify-end bg-[var(--brand)]" : "justify-start bg-[color-mix(in_oklab,var(--border)_75%,var(--surface))]"
+                          }`}
+                        >
+                          <span className="pointer-events-none block h-6 w-6 rounded-full bg-white shadow" aria-hidden />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {cfg.useCustom && (
+                    <div className="mt-2 grid gap-4 border-t border-[color-mix(in_oklab,var(--border)_30%,transparent)] pt-4 md:grid-cols-3">
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-medium muted-text">Public Key</span>
+                        <input
+                          className="interactive-control focus-ring px-3.5 py-2.5 text-sm"
+                          value={cfg.publicKey}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setModuleCredentials((prev) => ({
+                              ...prev,
+                              [item.key]: {
+                                ...prev[item.key],
+                                publicKey: val,
+                              },
+                            }));
+                          }}
+                          placeholder="ZetuPay Public Key"
+                        />
+                      </label>
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-medium muted-text">Private Key</span>
+                        <input
+                          type="password"
+                          className="interactive-control focus-ring px-3.5 py-2.5 text-sm"
+                          value={cfg.privateKey}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setModuleCredentials((prev) => ({
+                              ...prev,
+                              [item.key]: {
+                                ...prev[item.key],
+                                privateKey: val,
+                              },
+                            }));
+                          }}
+                          placeholder={cfg.privateKey ? "••••••••" : "ZetuPay Private Key"}
+                        />
+                      </label>
+                      <label className="grid gap-1 text-sm">
+                        <span className="font-medium muted-text">Wallet ID</span>
+                        <input
+                          className="interactive-control focus-ring px-3.5 py-2.5 text-sm"
+                          value={cfg.walletId}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setModuleCredentials((prev) => ({
+                              ...prev,
+                              [item.key]: {
+                                ...prev[item.key],
+                                walletId: val,
+                              },
+                            }));
+                          }}
+                          placeholder="ZetuPay Wallet ID"
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
         <div className="flex flex-wrap items-center gap-3">
           <button

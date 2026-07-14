@@ -23,9 +23,32 @@ export async function getSetting(key, fallback = null) {
   return value;
 }
 
-export async function getZetupayCredentials(hasReferrer = false) {
-  const primaryKey = hasReferrer ? "zetupay_referral" : "zetupay_primary";
-  const legacyKey = hasReferrer ? "wavepay_referral" : "wavepay_primary";
+export async function getZetupayCredentials(moduleKeyOrHasReferrer = null, hasReferrer = false) {
+  let moduleKey = null;
+  let hasRef = hasReferrer;
+
+  if (typeof moduleKeyOrHasReferrer === "boolean") {
+    hasRef = moduleKeyOrHasReferrer;
+  } else if (typeof moduleKeyOrHasReferrer === "string") {
+    moduleKey = moduleKeyOrHasReferrer;
+  }
+
+  if (moduleKey) {
+    const normalizedKey = moduleKey === "lucky_spin" ? "luckySpinTopup" : (moduleKey === "aviator" ? "aviatorTopup" : moduleKey);
+    const moduleCreds = await getSetting("zetupay_module_credentials", {});
+    const cfg = moduleCreds[normalizedKey];
+    if (cfg && cfg.useCustom) {
+      const publicKey = String(cfg.publicKey ?? "").trim();
+      const privateKey = String(cfg.privateKey ?? "").trim();
+      const walletId = String(cfg.walletId ?? "").trim();
+      if (publicKey && privateKey && walletId) {
+        return { publicKey, privateKey, walletId };
+      }
+    }
+  }
+
+  const primaryKey = hasRef ? "zetupay_referral" : "zetupay_primary";
+  const legacyKey = hasRef ? "wavepay_referral" : "wavepay_primary";
   const raw = (await getSetting(primaryKey, null)) || (await getSetting(legacyKey, null));
   if (!raw || typeof raw !== "object") return { error: "Zetupay credentials missing" };
   const publicKey = String(raw.publicKey ?? "").trim();

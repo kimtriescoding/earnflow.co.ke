@@ -33,7 +33,13 @@ export async function POST(request) {
     }
     const status = String(payment.status || "").toLowerCase();
 
-    const creds = await getZetupayCredentials(false);
+    let moduleKey = null;
+    if (activation) moduleKey = "activation";
+    else if (topup) moduleKey = "luckySpinTopup";
+    else if (aviatorTopup) moduleKey = "aviatorTopup";
+    else if (clientOrder) moduleKey = clientOrder.module;
+
+    const creds = await getZetupayCredentials(moduleKey, false);
     if (creds?.error) {
       logError("checkout_callback.no_credentials", { identifier: String(identifier) });
       return NextResponse.json({ success: false, message: "Gateway not configured" }, { status: 503 });

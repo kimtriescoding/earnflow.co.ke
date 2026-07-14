@@ -23,7 +23,11 @@ export async function POST(request) {
     const [topup, activation] = await Promise.all([LuckySpinTopup.findById(identifier), ActivationPayment.findById(identifier)]);
     if (!topup && !activation) return NextResponse.json({ success: true, message: "ack" }, { status: 200 });
 
-    const creds = await getZetupayCredentials(false);
+    let moduleKey = null;
+    if (topup) moduleKey = "luckySpinTopup";
+    else if (activation) moduleKey = "activation";
+
+    const creds = await getZetupayCredentials(moduleKey, false);
     if (creds?.error) {
       logError("spin.topup_callback_no_credentials", { identifier: String(identifier) });
       return NextResponse.json({ success: false, message: "Gateway not configured" }, { status: 503 });

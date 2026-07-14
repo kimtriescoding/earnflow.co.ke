@@ -29,13 +29,14 @@ export async function GET() {
   }
   await connectDB();
 
-  const [switches, falseRealAgg] = await Promise.all([
+  const [switches, falseRealAgg, moduleCredsRaw] = await Promise.all([
     getPaymentRealSwitches(),
     Transaction.aggregate([
       { $match: { type: { $in: FALSE_REAL_TYPES }, real: { $eq: false } } },
       mongoMatchSameCalendarDayToday("$createdAt"),
       { $group: { _id: "$type", count: { $sum: 1 }, totalAmount: { $sum: { $abs: "$amount" } } } },
     ]),
+    Settings.findOne({ key: "zetupay_module_credentials" }).lean(),
   ]);
 
   const tallies = FALSE_REAL_TYPES.reduce((acc, type) => {
@@ -47,11 +48,25 @@ export async function GET() {
     return acc;
   }, {});
 
+  const rawCreds = moduleCredsRaw?.value || {};
+  const moduleCredentials = {};
+  const modulesList = ["activation", "aviatorTopup", "luckySpinTopup", "video", "chat", "academic"];
+  for (const mod of modulesList) {
+    const cfg = rawCreds[mod] || {};
+    moduleCredentials[mod] = {
+      useCustom: Boolean(cfg.useCustom),
+      publicKey: cfg.publicKey || "",
+      walletId: cfg.walletId || "",
+      privateKey: cfg.privateKey ? "••••••••" : "",
+    };
+  }
+
   const data = {
     switches,
     tallies,
     talliesScope: "today",
     talliesTimeZone: DASHBOARD_EARNINGS_TIMEZONE,
+    moduleCredentials,
   };
   ADMIN_SWITCHER_CACHE.set("global", data);
   return timer.finish(withPrivateCacheControl(ok({ data }), 8));
@@ -69,7 +84,36 @@ export async function POST(request) {
     aviatorTopup: toBool(body.aviatorTopup, current.aviatorTopup),
     luckySpinTopup: toBool(body.luckySpinTopup, current.luckySpinTopup),
   };
-  await Promise.all([
+
+  const incomingCreds = body.moduleCredentials || {};
+  const currentCredsDoc = await Settings.findOne({ key: "zetupay_module_credentials" }).lean();
+  const currentCreds = currentCredsDoc?.value || {};
+  
+  const nextCreds = {};
+  const modulesList = ["activation", "aviatorTopup", "luckySpinTopup", "video", "chat", "academic"];
+  let hasCredChanges = false;
+  
+  if (body.moduleCredentials) {
+    hasCredChanges = true;
+    for (const mod of modulesList) {
+      const incomingCfg = incomingCreds[mod] || {};
+      const currentCfg = currentCreds[mod] || {};
+      
+      let privateKey = incomingCfg.privateKey || "";
+      if (privateKey === "••••••••") {
+        privateKey = currentCfg.privateKey || "";
+      }
+      
+      nextCreds[mod] = {
+        useCustom: Boolean(incomingCfg.useCustom),
+        publicKey: String(incomingCfg.publicKey || "").trim(),
+        privateKey: String(privateKey).trim(),
+        walletId: String(incomingCfg.walletId || "").trim(),
+      };
+    }
+  }
+
+  const promises = [
     Settings.findOneAndUpdate(
       { key: REALITY_SWITCH_KEYS.activation },
       { key: REALITY_SWITCH_KEYS.activation, value: next.activation },
@@ -85,7 +129,25 @@ export async function POST(request) {
       { key: REALITY_SWITCH_KEYS.luckySpinTopup, value: next.luckySpinTopup },
       { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
     ),
-  ]);
+  ];
+
+  if (hasCredChanges) {
+    promises.push(
+      Settings.findOneAndUpdate(
+        { key: "zetupay_module_credentials" },
+        { key: "zetupay_module_credentials", value: nextCreds },
+        { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
+      )
+    );
+  }
+
+  await Promise.all(promises);
+
+  if (hasCredChanges) {
+    const { deleteCache } = await import("@/lib/cache/config-cache");
+    deleteCache("settings:zetupay_module_credentials");
+  }
+
   invalidatePaymentRealSwitchCache();
   invalidateAdminCaches();
   ADMIN_SWITCHER_CACHE.delete("global");

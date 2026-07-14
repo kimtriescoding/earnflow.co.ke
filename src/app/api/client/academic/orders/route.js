@@ -103,7 +103,7 @@ export async function POST(request) {
   order.moduleItemId = moduleItem._id;
   await order.save();
 
-  const creds = await getZetupayCredentials(false);
+  const creds = await getZetupayCredentials("academic", false);
   if (creds?.error) return fail("Payment credentials missing", 500);
   const reference = `CL-ACA-${Date.now()}`;
   const result = await initiateCheckout({
