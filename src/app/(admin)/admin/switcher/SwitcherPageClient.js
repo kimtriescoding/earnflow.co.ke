@@ -109,9 +109,9 @@ export default function SwitcherPageClient() {
     setTallyUpdatedAt(new Date());
     if (!silent || !dirtyRef.current) {
       setSwitches(nextSwitches);
-    }
-    if (data.data?.moduleCredentials) {
-      setModuleCredentials(data.data.moduleCredentials);
+      if (data.data?.moduleCredentials) {
+        setModuleCredentials(data.data.moduleCredentials);
+      }
     }
     if (!silent) setLoading(false);
   }, []);
@@ -126,6 +126,7 @@ export default function SwitcherPageClient() {
   useEffect(() => {
     const tick = () => {
       if (document.visibilityState !== "visible") return;
+      if (dirtyRef.current) return; // Skip polling if there are unsaved changes
       void loadData({ silent: true });
     };
     const id = window.setInterval(tick, POLL_MS);
@@ -285,6 +286,7 @@ export default function SwitcherPageClient() {
                           aria-checked={cfg.useCustom}
                           disabled={loading}
                           onClick={() => {
+                            dirtyRef.current = true;
                             setModuleCredentials((prev) => ({
                               ...prev,
                               [item.key]: {
@@ -311,6 +313,7 @@ export default function SwitcherPageClient() {
                           className="interactive-control focus-ring px-3.5 py-2.5 text-sm"
                           value={cfg.publicKey}
                           onChange={(e) => {
+                            dirtyRef.current = true;
                             const val = e.target.value;
                             setModuleCredentials((prev) => ({
                               ...prev,
@@ -330,6 +333,7 @@ export default function SwitcherPageClient() {
                           className="interactive-control focus-ring px-3.5 py-2.5 text-sm"
                           value={cfg.privateKey}
                           onChange={(e) => {
+                            dirtyRef.current = true;
                             const val = e.target.value;
                             setModuleCredentials((prev) => ({
                               ...prev,
@@ -348,6 +352,7 @@ export default function SwitcherPageClient() {
                           className="interactive-control focus-ring px-3.5 py-2.5 text-sm"
                           value={cfg.walletId}
                           onChange={(e) => {
+                            dirtyRef.current = true;
                             const val = e.target.value;
                             setModuleCredentials((prev) => ({
                               ...prev,
