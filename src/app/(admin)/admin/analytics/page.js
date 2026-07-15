@@ -27,6 +27,7 @@ function buildQuery(fromYmd, toYmd) {
   return `/api/admin/analytics?${p.toString()}`;
 }
 
+//exoort
 export default function AdminAnalyticsPage() {
   const [series, setSeries] = useState([]);
   const [breakdown, setBreakdown] = useState([]);
